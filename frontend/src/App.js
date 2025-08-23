@@ -247,6 +247,15 @@ function App() {
     }
   };
 
+  const skipLineupTurn = async (teamId) => {
+    try {
+      await axios.post(`${API}/league/lineup/skip-turn`, { team_id: teamId });
+      await loadGameState();
+    } catch (error) {
+      console.error('Error skipping turn:', error);
+    }
+  };
+
   const loadMarketStatus = async () => {
     try {
       const response = await axios.get(`${API}/league/market-status`);

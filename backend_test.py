@@ -1225,6 +1225,152 @@ class FootballDraftAPITester:
         
         return success
 
+    def test_transfer_market_validations(self):
+        """Test transfer market validation edge cases - NEW FEATURE"""
+        print("\n🎯 TESTING TRANSFER MARKET VALIDATIONS")
+        
+        # Ensure we're in league phase
+        if not self.game_state or self.game_state.get('current_phase') not in ['pre_match', 'league']:
+            print("❌ Game not in league phase for validation tests")
+            return False
+        
+        self.test_get_teams()
+        self.test_get_players()
+        
+        # Test 1: Try to set clause for player not owned
+        if len(self.teams) >= 2:
+            team1 = self.teams[0]
+            team2 = self.teams[1]
+            
+            # Find a player from team2
+            team2_player = None
+            for player in self.players:
+                if player.get('team_id') == team2['id']:
+                    team2_player = player
+                    break
+            
+            if team2_player:
+                success1, response1 = self.run_test(
+                    "Try to set clause for non-owned player (Should Fail)",
+                    "POST",
+                    f"teams/{team1['id']}/set-clause",
+                    400,
+                    data={
+                        "player_id": team2_player['id'],
+                        "clause_amount": 1000000
+                    }
+                )
+                
+                if success1:
+                    print("✅ Correctly prevented setting clause for non-owned player")
+                else:
+                    print("❌ Should have prevented setting clause for non-owned player")
+                    return False
+        
+        # Test 2: Try to release player from team with exactly 7 players
+        team_with_7 = None
+        for team in self.teams:
+            if len(team.get('players', [])) == 7:
+                team_with_7 = team
+                break
+        
+        if team_with_7:
+            player_from_7_team = None
+            for player in self.players:
+                if player.get('team_id') == team_with_7['id']:
+                    player_from_7_team = player
+                    break
+            
+            if player_from_7_team:
+                success2, response2 = self.run_test(
+                    "Try to release player from team with only 7 players (Should Fail)",
+                    "POST",
+                    "teams/release-player",
+                    400,
+                    data={
+                        "team_id": team_with_7['id'],
+                        "player_id": player_from_7_team['id']
+                    }
+                )
+                
+                if success2:
+                    print("✅ Correctly prevented release that would leave team with <7 players")
+                else:
+                    print("❌ Should have prevented release from team with only 7 players")
+                    return False
+        
+        # Test 3: Try to buy player when buyer would exceed 10 players
+        team_with_10 = None
+        for team in self.teams:
+            if len(team.get('players', [])) == 10:
+                team_with_10 = team
+                break
+        
+        if team_with_10:
+            # Find another team to sell from
+            seller_team = None
+            for team in self.teams:
+                if team['id'] != team_with_10['id'] and len(team.get('players', [])) > 7:
+                    seller_team = team
+                    break
+            
+            if seller_team:
+                seller_player = None
+                for player in self.players:
+                    if player.get('team_id') == seller_team['id']:
+                        seller_player = player
+                        break
+                
+                if seller_player:
+                    success3, response3 = self.run_test(
+                        "Try to buy player when buyer has 10 players (Should Fail)",
+                        "POST",
+                        "teams/buy-player",
+                        400,
+                        data={
+                            "buyer_team_id": team_with_10['id'],
+                            "seller_team_id": seller_team['id'],
+                            "player_id": seller_player['id']
+                        }
+                    )
+                    
+                    if success3:
+                        print("✅ Correctly prevented purchase that would exceed 10 players")
+                    else:
+                        print("❌ Should have prevented purchase when buyer has 10 players")
+                        return False
+        
+        # Test 4: Try to set clause with insufficient budget
+        if self.teams:
+            test_team = self.teams[0]
+            team_player = None
+            for player in self.players:
+                if player.get('team_id') == test_team['id']:
+                    team_player = player
+                    break
+            
+            if team_player:
+                excessive_clause = test_team['budget'] + 1000000  # More than budget
+                
+                success4, response4 = self.run_test(
+                    "Try to set clause higher than budget (Should Fail)",
+                    "POST",
+                    f"teams/{test_team['id']}/set-clause",
+                    400,
+                    data={
+                        "player_id": team_player['id'],
+                        "clause_amount": excessive_clause
+                    }
+                )
+                
+                if success4:
+                    print("✅ Correctly prevented setting clause higher than budget")
+                else:
+                    print("❌ Should have prevented setting excessive clause")
+                    return False
+        
+        return True
+
     def test_edge_cases(self):
         """Test edge cases for the new functionality"""
         print("\n🎯 TESTING EDGE CASES")

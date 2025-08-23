@@ -38,6 +38,7 @@ class PlayerStats(BaseModel):
     despeje: int = Field(..., ge=1, le=6)
     robo: int = Field(..., ge=1, le=6)
     bloqueo: int = Field(..., ge=1, le=6)
+    atajada: int = Field(..., ge=1, le=6)
 
 class Player(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

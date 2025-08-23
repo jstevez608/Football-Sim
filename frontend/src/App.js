@@ -464,6 +464,8 @@ function App() {
       </Card>
     );
   };
+
+  const PlayerEditModal = ({ player, onSave, onClose }) => {
     const [editData, setEditData] = useState({
       name: player.name,
       price: player.price,

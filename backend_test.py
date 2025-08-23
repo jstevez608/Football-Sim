@@ -708,23 +708,62 @@ class FootballDraftAPITester:
         return success and success2
 
 def main():
-    print("🚀 Starting Football Draft League API Tests")
-    print("=" * 60)
+    print("🚀 Starting Football Draft League API Tests - NEW FEATURES FOCUS")
+    print("=" * 80)
     
     tester = FootballDraftAPITester()
     
-    # Run all tests in sequence
+    # Initialize game and create 8 teams first
+    print("\n🔧 SETUP PHASE")
+    print("=" * 40)
+    
+    # Initialize game
+    success = tester.test_game_initialization()
+    if not success:
+        print("❌ Failed to initialize game. Stopping tests.")
+        return 1
+    
+    # Load players
+    success = tester.test_get_players()
+    if not success:
+        print("❌ Failed to load players. Stopping tests.")
+        return 1
+    
+    # Create 8 teams
+    team_configs = [
+        {"name": f"Team {i}", "colors": {"primary": "#FF0000", "secondary": "#FFFFFF"}, "budget": 80000000}
+        for i in range(1, 9)
+    ]
+    
+    for team_config in team_configs:
+        success, response = tester.run_test(
+            f"Create {team_config['name']}",
+            "POST",
+            "teams",
+            200,
+            data=team_config
+        )
+        if not success:
+            print(f"❌ Failed to create {team_config['name']}. Stopping tests.")
+            return 1
+    
+    # Start draft
+    success = tester.test_start_draft()
+    if not success:
+        print("❌ Failed to start draft. Stopping tests.")
+        return 1
+    
+    # Run NEW FEATURE tests
+    print("\n🎯 NEW FEATURES TESTING")
+    print("=" * 40)
+    
     tests = [
-        ("Root Endpoint", tester.test_root_endpoint),
-        ("Game Initialization", tester.test_game_initialization),
-        ("Get Players", tester.test_get_players),
-        ("Create Teams", tester.test_create_teams),
-        ("Get Teams", tester.test_get_teams),
-        ("Game State", tester.test_game_state),
-        ("Player Update", tester.test_player_update),
-        ("Budget Validation", tester.test_budget_validation),
-        ("Start Draft", tester.test_start_draft),
-        ("Draft Player", tester.test_draft_player),
+        ("Skip Turn Functionality", tester.test_skip_turn_functionality),
+        ("Draft Players to Minimum 7", tester.test_draft_players_to_minimum),
+        ("League Start with 7+ Players", tester.test_league_start_with_7_players),
+        ("Set Player Clause", tester.test_set_player_clause),
+        ("Buy Player Between Teams", tester.test_buy_player_between_teams),
+        ("Edge Cases", tester.test_edge_cases),
     ]
     
     failed_tests = []
@@ -740,9 +779,9 @@ def main():
             failed_tests.append(test_name)
     
     # Print final results
-    print(f"\n{'='*60}")
-    print(f"📊 FINAL RESULTS")
-    print(f"{'='*60}")
+    print(f"\n{'='*80}")
+    print(f"📊 FINAL RESULTS - NEW FEATURES TESTING")
+    print(f"{'='*80}")
     print(f"Tests run: {tester.tests_run}")
     print(f"Tests passed: {tester.tests_passed}")
     print(f"Tests failed: {tester.tests_run - tester.tests_passed}")
@@ -752,8 +791,13 @@ def main():
         print(f"\n❌ Failed test categories:")
         for test in failed_tests:
             print(f"   - {test}")
+        print(f"\n🔧 ACTION ITEMS FOR E1:")
+        print(f"   - Review failed tests above")
+        print(f"   - Check backend logs for detailed error information")
+        print(f"   - Verify API endpoints are working as expected")
     else:
-        print(f"\n✅ All test categories passed!")
+        print(f"\n✅ All new feature tests passed!")
+        print(f"🎉 Skip turn, 7-player league start, and clause/transfer system working correctly!")
     
     return 0 if len(failed_tests) == 0 else 1
 

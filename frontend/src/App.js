@@ -28,11 +28,25 @@ function App() {
     budget: 80000000
   });
 
+  const [standings, setStandings] = useState([]);
+  const [roundMatches, setRoundMatches] = useState([]);
+  const [formations, setFormations] = useState({});
+  const [selectedFormation, setSelectedFormation] = useState('A');
+  const [selectedPlayers, setSelectedPlayers] = useState([]);
+
   useEffect(() => {
     loadGameState();
     loadPlayers();
     loadTeams();
+    loadStandings();
+    loadFormations();
   }, []);
+
+  useEffect(() => {
+    if (gameState && gameState.current_round) {
+      loadRoundMatches(gameState.current_round);
+    }
+  }, [gameState]);
 
   const loadGameState = async () => {
     try {

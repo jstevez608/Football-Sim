@@ -663,26 +663,35 @@ function App() {
                     
                     <h3 className="font-semibold mb-4">Estado de Equipos</h3>
                     <div className="space-y-3">
-                      {teams.map((team, index) => (
-                        <Card key={team.id} className={index === gameState.current_team_turn ? 'ring-2 ring-blue-500' : ''}>
-                          <CardContent className="p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div 
-                                className="w-3 h-3 rounded"
-                                style={{ backgroundColor: team.colors.primary }}
-                              />
-                              <span className="font-medium text-sm">{team.name}</span>
-                            </div>
-                            <div className="text-xs text-gray-600">
-                              <div>Jugadores: {team.players?.length || 0}/10</div>
-                              <div>Presupuesto: {formatCurrency(team.budget)}</div>
-                              {(team.players?.length || 0) >= 7 && (
-                                <div className="text-green-600 font-medium">✓ Listo para liga</div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                      {teams.map((team, index) => {
+                        const isCurrentTurn = gameState.draft_order && 
+                          gameState.current_team_turn !== undefined &&
+                          gameState.draft_order[gameState.current_team_turn] === team.id;
+                        
+                        return (
+                          <Card key={team.id} className={isCurrentTurn ? 'ring-2 ring-blue-500' : ''}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div 
+                                  className="w-3 h-3 rounded"
+                                  style={{ backgroundColor: team.colors.primary }}
+                                />
+                                <span className="font-medium text-sm">{team.name}</span>
+                                {isCurrentTurn && (
+                                  <Badge className="text-xs">Su turno</Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-600">
+                                <div>Jugadores: {team.players?.length || 0}/10</div>
+                                <div>Presupuesto: {formatCurrency(team.budget)}</div>
+                                {(team.players?.length || 0) >= 7 && (
+                                  <div className="text-green-600 font-medium">✓ Listo para liga</div>
+                                )}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                     
                     <Button 

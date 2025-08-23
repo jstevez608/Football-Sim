@@ -413,9 +413,9 @@ class FootballDraftAPITester:
         print(f"\n✅ Successfully drafted {players_drafted} players ({target_players_per_team} per team)")
         return True
 
-    def test_league_start_with_7_players(self):
-        """Test starting league with minimum 7 players per team - NEW FEATURE"""
-        print("\n🎯 TESTING LEAGUE START WITH MINIMUM 7 PLAYERS")
+    def test_league_start_comprehensive(self):
+        """Test comprehensive league start with calendar generation - NEW FEATURE"""
+        print("\n🎯 TESTING COMPREHENSIVE LEAGUE START")
         
         # Get current teams to verify they have 7+ players
         self.test_get_teams()
@@ -435,24 +435,67 @@ class FootballDraftAPITester:
         
         # Test league start
         success, response = self.run_test(
-            "Start League with 7+ Players",
+            "Start League - Generate 14-Round Calendar",
             "POST",
             "league/start",
             200
         )
         
         if success:
-            matches_created = response.get('matches_created', 0)
-            print(f"   Matches created: {matches_created}")
+            total_matches = response.get('total_matches', 0)
+            rounds = response.get('rounds', 0)
+            print(f"   Total matches created: {total_matches}")
+            print(f"   Rounds: {rounds}")
             
-            # Verify game state changed to league
-            self.test_game_state()
-            if self.game_state.get('current_phase') == 'league':
-                print("✅ Game phase successfully changed to 'league'")
-                return True
+            # Verify exactly 56 matches (8 teams × 7 rounds × 4 matches per round)
+            if total_matches == 56:
+                print("✅ Correct number of matches generated (56)")
             else:
-                print(f"❌ Game phase is {self.game_state.get('current_phase')}, expected 'league'")
+                print(f"❌ Expected 56 matches, got {total_matches}")
                 return False
+            
+            if rounds == 14:
+                print("✅ Correct number of rounds (14)")
+            else:
+                print(f"❌ Expected 14 rounds, got {rounds}")
+                return False
+            
+            # Verify game state changed to pre_match with lineup selection
+            self.test_game_state()
+            current_phase = self.game_state.get('current_phase')
+            lineup_selection = self.game_state.get('lineup_selection_phase')
+            
+            if current_phase == 'pre_match':
+                print("✅ Game phase successfully changed to 'pre_match'")
+            else:
+                print(f"❌ Game phase is {current_phase}, expected 'pre_match'")
+                return False
+                
+            if lineup_selection:
+                print("✅ Lineup selection phase activated")
+            else:
+                print("❌ Lineup selection phase not activated")
+                return False
+            
+            # Verify team statistics initialized
+            self.test_get_teams()
+            stats_initialized = True
+            for team in self.teams:
+                required_stats = ['points', 'goals_for', 'goals_against', 'matches_played', 'wins', 'draws', 'losses']
+                for stat in required_stats:
+                    if stat not in team or team[stat] != 0:
+                        stats_initialized = False
+                        break
+                if not stats_initialized:
+                    break
+            
+            if stats_initialized:
+                print("✅ Team statistics properly initialized")
+            else:
+                print("❌ Team statistics not properly initialized")
+                return False
+            
+            return True
         
         return success
 

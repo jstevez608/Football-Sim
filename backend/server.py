@@ -362,6 +362,9 @@ async def get_game_state():
     game_state = await db.game_state.find_one()
     if not game_state:
         return {"error": "No game initialized"}
+    # Convert ObjectId to string for JSON serialization
+    if "_id" in game_state:
+        game_state["_id"] = str(game_state["_id"])
     return game_state
 
 @api_router.post("/draft/start")

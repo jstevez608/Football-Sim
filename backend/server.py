@@ -536,14 +536,26 @@ async def skip_draft_turn(request: DraftSkipRequest):
 
 @api_router.post("/league/start")
 async def start_league():
-    """Start the league phase"""
+    """Start the league phase - requires minimum 7 players per team"""
+    # Check if all teams have at least 7 players
+    teams = await db.teams.find().to_list(length=None)
+    if len(teams) != 8:
+        raise HTTPException(status_code=400, detail="Need exactly 8 teams to start league")
+    
+    for team in teams:
+        player_count = len(team.get("players", []))
+        if player_count < 7:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Team '{team['name']}' needs at least 7 players (has {player_count})"
+            )
+    
     await db.game_state.update_one(
         {},
         {"$set": {"current_phase": "league", "current_round": 1}}
     )
     
     # Generate match fixtures
-    teams = await db.teams.find().to_list(length=None)
     team_ids = [team["id"] for team in teams]
     
     # Generate all possible matches (round-robin)
@@ -563,6 +575,116 @@ async def start_league():
     await db.matches.insert_many(matches)
     
     return {"message": "League started", "matches_created": len(matches)}
+
+@api_router.post("/teams/{team_id}/set-clause")
+async def set_player_clause(team_id: str, request: SetClauseRequest):
+    """Set protection clause for team's own player"""
+    game_state = await db.game_state.find_one()
+    if not game_state or game_state["current_phase"] != "league":
+        raise HTTPException(status_code=400, detail="Can only set clauses during league phase")
+    
+    # Verify team owns the player
+    player = await db.players.find_one({"id": request.player_id})
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    if player.get("team_id") != team_id:
+        raise HTTPException(status_code=400, detail="You can only set clauses for your own players")
+    
+    # Verify team has enough budget for the clause
+    team = await db.teams.find_one({"id": team_id})
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    if team["budget"] < request.clause_amount:
+        raise HTTPException(status_code=400, detail="Insufficient budget to set clause")
+    
+    # Update player clause and deduct cost from team budget
+    await db.players.update_one(
+        {"id": request.player_id},
+        {"$set": {"clause_amount": request.clause_amount}}
+    )
+    
+    await db.teams.update_one(
+        {"id": team_id},
+        {"$inc": {"budget": -request.clause_amount}}
+    )
+    
+    return {"message": "Clause set successfully", "clause_amount": request.clause_amount}
+
+@api_router.post("/teams/buy-player")
+async def buy_player_from_team(request: BuyPlayerRequest):
+    """Buy player from another team during league phase"""
+    game_state = await db.game_state.find_one()
+    if not game_state or game_state["current_phase"] != "league":
+        raise HTTPException(status_code=400, detail="Can only buy players during league phase")
+    
+    # Get player, buyer and seller teams
+    player = await db.players.find_one({"id": request.player_id})
+    buyer_team = await db.teams.find_one({"id": request.buyer_team_id})
+    seller_team = await db.teams.find_one({"id": request.seller_team_id})
+    
+    if not player or not buyer_team or not seller_team:
+        raise HTTPException(status_code=404, detail="Player or team not found")
+    
+    # Verify player belongs to seller team
+    if player.get("team_id") != request.seller_team_id:
+        raise HTTPException(status_code=400, detail="Player doesn't belong to seller team")
+    
+    # Verify seller team won't go below 7 players
+    seller_player_count = len(seller_team.get("players", []))
+    if seller_player_count <= 7:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot buy player - seller team must maintain at least 7 players"
+        )
+    
+    # Verify buyer team won't exceed 10 players
+    buyer_player_count = len(buyer_team.get("players", []))
+    if buyer_player_count >= 10:
+        raise HTTPException(status_code=400, detail="Buyer team already has maximum players (10)")
+    
+    # Calculate total cost (base price + clause)
+    base_price = player["price"]
+    clause_amount = player.get("clause_amount", 0)
+    total_cost = base_price + clause_amount
+    
+    # Verify buyer has enough budget
+    if buyer_team["budget"] < total_cost:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Insufficient budget. Need {total_cost}, have {buyer_team['budget']}"
+        )
+    
+    # Transfer player
+    await db.players.update_one(
+        {"id": request.player_id},
+        {"$set": {"team_id": request.buyer_team_id, "clause_amount": 0}}
+    )
+    
+    # Update buyer team (add player, deduct money)
+    buyer_players = buyer_team.get("players", [])
+    buyer_players.append(request.player_id)
+    await db.teams.update_one(
+        {"id": request.buyer_team_id},
+        {"$set": {"players": buyer_players}, "$inc": {"budget": -total_cost}}
+    )
+    
+    # Update seller team (remove player, add money)
+    seller_players = seller_team.get("players", [])
+    seller_players.remove(request.player_id)
+    await db.teams.update_one(
+        {"id": request.seller_team_id},
+        {"$set": {"players": seller_players}, "$inc": {"budget": total_cost}}
+    )
+    
+    return {
+        "message": "Player purchased successfully",
+        "player_name": player["name"],
+        "total_cost": total_cost,
+        "base_price": base_price,
+        "clause_amount": clause_amount
+    }
 
 @api_router.get("/matches/round/{round_number}")
 async def get_round_matches(round_number: int):

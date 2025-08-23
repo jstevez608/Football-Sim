@@ -427,6 +427,18 @@ class DraftPickRequest(BaseModel):
     player_id: str
     clause_amount: int = 0
 
+class Formation(BaseModel):
+    name: str
+    portero: int = 1
+    defensas: int
+    medios: int 
+    delanteros: int
+
+class LineupSelection(BaseModel):
+    team_id: str
+    formation: str  # "A", "B", or "C"
+    players: List[str]  # 7 player IDs
+
 class DraftSkipRequest(BaseModel):
     team_id: str
 
@@ -438,6 +450,17 @@ class BuyPlayerRequest(BaseModel):
     buyer_team_id: str
     seller_team_id: str
     player_id: str
+
+class MatchResult(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    home_team_id: str
+    away_team_id: str
+    round_number: int
+    home_score: int = 0
+    away_score: int = 0
+    home_lineup: List[str] = []  # Player IDs
+    away_lineup: List[str] = []  # Player IDs
+    played: bool = False
 
 @api_router.post("/draft/pick")
 async def draft_player(request: DraftPickRequest):

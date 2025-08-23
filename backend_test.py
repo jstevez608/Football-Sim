@@ -323,18 +323,12 @@ class FootballDraftAPITester:
         
         player_to_draft = available_players[0]
         
-        # Draft the player
-        draft_data = {
-            "team_id": current_team_id,
-            "player_id": player_to_draft['id']
-        }
-        
+        # Draft the player using query parameters
         success, response = self.run_test(
             f"Draft Player - {player_to_draft['name']}",
             "POST",
-            "draft/pick",
-            200,
-            data=draft_data
+            f"draft/pick?team_id={current_team_id}&player_id={player_to_draft['id']}",
+            200
         )
         return success
 

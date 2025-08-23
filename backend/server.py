@@ -679,7 +679,185 @@ async def start_league():
     
     return {"message": "League started", "total_matches": len(matches), "rounds": 14}
 
-@api_router.post("/teams/{team_id}/set-clause")
+@api_router.get("/league/formations")
+async def get_available_formations():
+    """Get available team formations"""
+    formations = {
+        "A": {"name": "4-3-1", "portero": 1, "defensas": 2, "medios": 3, "delanteros": 1},
+        "B": {"name": "5-2-1", "portero": 1, "defensas": 3, "medios": 2, "delanteros": 1},
+        "C": {"name": "4-2-2", "portero": 1, "defensas": 2, "medios": 2, "delanteros": 2}
+    }
+    return formations
+
+@api_router.get("/league/matches/round/{round_number}")
+async def get_round_matches(round_number: int):
+    """Get matches for a specific round"""
+    matches = await db.matches.find({"round_number": round_number}).to_list(length=None)
+    return matches
+
+@api_router.get("/league/standings")
+async def get_league_standings():
+    """Get current league standings sorted by points, goal difference, goals scored"""
+    teams = await db.teams.find().to_list(length=None)
+    
+    # Sort by: 1. Points (desc), 2. Goal difference (desc), 3. Goals scored (desc)
+    def sorting_key(team):
+        points = team.get("points", 0)
+        goals_for = team.get("goals_for", 0)
+        goals_against = team.get("goals_against", 0)
+        goal_difference = goals_for - goals_against
+        return (-points, -goal_difference, -goals_for)
+    
+    teams.sort(key=sorting_key)
+    
+    standings = []
+    for i, team in enumerate(teams):
+        standing = {
+            "position": i + 1,
+            "team_name": team["name"],
+            "team_id": team["id"],
+            "points": team.get("points", 0),
+            "matches_played": team.get("matches_played", 0),
+            "wins": team.get("wins", 0),
+            "draws": team.get("draws", 0),
+            "losses": team.get("losses", 0),
+            "goals_for": team.get("goals_for", 0),
+            "goals_against": team.get("goals_against", 0),
+            "goal_difference": team.get("goals_for", 0) - team.get("goals_against", 0)
+        }
+        standings.append(standing)
+    
+    return standings
+
+@api_router.post("/league/lineup/select")
+async def select_team_lineup(lineup: LineupSelection):
+    """Select team lineup and formation for current round"""
+    game_state = await db.game_state.find_one()
+    if not game_state or game_state.get("current_phase") != "pre_match":
+        raise HTTPException(status_code=400, detail="Not in pre-match phase")
+    
+    if not game_state.get("lineup_selection_phase"):
+        raise HTTPException(status_code=400, detail="Not in lineup selection phase")
+    
+    # Check if it's this team's turn
+    teams = await db.teams.find().to_list(length=None)
+    current_team_index = game_state.get("current_team_turn", 0)
+    
+    if current_team_index >= len(teams):
+        raise HTTPException(status_code=400, detail="Invalid team turn")
+    
+    current_team = teams[current_team_index]
+    if current_team["id"] != lineup.team_id:
+        raise HTTPException(status_code=400, detail="Not your turn to select lineup")
+    
+    # Validate formation
+    formations = {
+        "A": {"portero": 1, "defensas": 2, "medios": 3, "delanteros": 1},
+        "B": {"portero": 1, "defensas": 3, "medios": 2, "delanteros": 1},
+        "C": {"portero": 1, "defensas": 2, "medios": 2, "delanteros": 2}
+    }
+    
+    if lineup.formation not in formations:
+        raise HTTPException(status_code=400, detail="Invalid formation")
+    
+    formation = formations[lineup.formation]
+    
+    # Validate lineup length
+    if len(lineup.players) != 7:
+        raise HTTPException(status_code=400, detail="Must select exactly 7 players")
+    
+    # Get selected players and validate they belong to the team
+    selected_players = await db.players.find({"id": {"$in": lineup.players}}).to_list(length=None)
+    
+    if len(selected_players) != 7:
+        raise HTTPException(status_code=400, detail="Some selected players not found")
+    
+    # Check all players belong to the team
+    for player in selected_players:
+        if player.get("team_id") != lineup.team_id:
+            raise HTTPException(status_code=400, detail=f"Player {player['name']} doesn't belong to your team")
+    
+    # Check players are available (not resting due to resistance)
+    for player in selected_players:
+        if player.get("is_resting", False):
+            raise HTTPException(status_code=400, detail=f"Player {player['name']} is resting and cannot play")
+    
+    # Validate formation requirements
+    position_counts = {"PORTERO": 0, "DEFENSA": 0, "MEDIO": 0, "DELANTERO": 0}
+    for player in selected_players:
+        position_counts[player["position"]] += 1
+    
+    if (position_counts["PORTERO"] != formation["portero"] or
+        position_counts["DEFENSA"] != formation["defensas"] or
+        position_counts["MEDIO"] != formation["medios"] or
+        position_counts["DELANTERO"] != formation["delanteros"]):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Formation {lineup.formation} requires {formation['portero']} GK, {formation['defensas']} DEF, {formation['medios']} MID, {formation['delanteros']} FWD"
+        )
+    
+    # Update team with selected lineup
+    await db.teams.update_one(
+        {"id": lineup.team_id},
+        {"$set": {
+            "current_lineup": lineup.players,
+            "current_formation": lineup.formation
+        }}
+    )
+    
+    # Move to next team's turn
+    next_turn = (current_team_index + 1) % len(teams)
+    
+    # If all teams have selected their lineups, move to match phase
+    if next_turn == 0:
+        # Check if all teams have selected lineups
+        teams_with_lineups = await db.teams.count_documents({"current_lineup": {"$ne": []}})
+        if teams_with_lineups == len(teams):
+            await db.game_state.update_one(
+                {"id": game_state["id"]},
+                {"$set": {
+                    "lineup_selection_phase": False,
+                    "current_phase": "match",
+                    "current_team_turn": 0
+                }}
+            )
+            return {"message": "Lineup selected. All teams ready - proceeding to matches!", "next_phase": "match"}
+    
+    await db.game_state.update_one(
+        {"id": game_state["id"]},
+        {"$set": {"current_team_turn": next_turn}}
+    )
+    
+    return {"message": "Lineup selected successfully", "next_turn": next_turn}
+
+@api_router.post("/league/lineup/skip-turn")
+async def skip_lineup_turn(team_data: dict):
+    """Skip lineup selection turn"""
+    team_id = team_data.get("team_id")
+    
+    game_state = await db.game_state.find_one()
+    if not game_state or not game_state.get("lineup_selection_phase"):
+        raise HTTPException(status_code=400, detail="Not in lineup selection phase")
+    
+    teams = await db.teams.find().to_list(length=None)
+    current_team_index = game_state.get("current_team_turn", 0)
+    
+    if current_team_index >= len(teams):
+        raise HTTPException(status_code=400, detail="Invalid team turn")
+    
+    current_team = teams[current_team_index]
+    if current_team["id"] != team_id:
+        raise HTTPException(status_code=400, detail="Not your turn")
+    
+    # Move to next team's turn
+    next_turn = (current_team_index + 1) % len(teams)
+    
+    await db.game_state.update_one(
+        {"id": game_state["id"]},
+        {"$set": {"current_team_turn": next_turn}}
+    )
+    
+    return {"message": "Turn skipped", "next_turn": next_turn}
 async def set_player_clause(team_id: str, request: SetClauseRequest):
     """Set protection clause for team's own player"""
     game_state = await db.game_state.find_one()

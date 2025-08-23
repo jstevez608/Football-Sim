@@ -424,9 +424,21 @@ async def draft_player(team_id: str, player_id: str, clause_amount: int = 0):
     if not game_state or game_state["current_phase"] != "draft":
         raise HTTPException(status_code=400, detail="Not in draft phase")
     
-    current_team = game_state["draft_order"][game_state["current_team_turn"]]
+    # Debug information
+    current_team_index = game_state.get("current_team_turn", 0)
+    draft_order = game_state.get("draft_order", [])
+    
+    if current_team_index >= len(draft_order):
+        raise HTTPException(status_code=400, detail="Invalid turn index")
+    
+    current_team = draft_order[current_team_index]
+    
+    # Debug: log the comparison
+    print(f"DEBUG: Current team ID: {current_team}, Requested team ID: {team_id}")
+    print(f"DEBUG: Turn index: {current_team_index}, Draft order: {draft_order}")
+    
     if current_team != team_id:
-        raise HTTPException(status_code=400, detail="Not your turn")
+        raise HTTPException(status_code=400, detail=f"Not your turn. Current turn: team index {current_team_index}")
     
     # Check team budget and player availability
     team = await db.teams.find_one({"id": team_id})
@@ -463,13 +475,13 @@ async def draft_player(team_id: str, player_id: str, clause_amount: int = 0):
     )
     
     # Move to next team's turn
-    next_turn = (game_state["current_team_turn"] + 1) % len(game_state["teams"])
+    next_turn = (current_team_index + 1) % len(draft_order)
     await db.game_state.update_one(
         {"id": game_state["id"]},
         {"$set": {"current_team_turn": next_turn}}
     )
     
-    return {"message": "Player drafted successfully"}
+    return {"message": "Player drafted successfully", "next_turn_index": next_turn}
 
 @api_router.post("/league/start")
 async def start_league():

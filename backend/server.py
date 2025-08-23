@@ -504,6 +504,36 @@ async def draft_player(request: DraftPickRequest):
     
     return {"message": "Player drafted successfully", "next_turn_index": next_turn}
 
+@api_router.post("/draft/skip-turn")
+async def skip_draft_turn(request: DraftSkipRequest):
+    """Skip current team's draft turn"""
+    team_id = request.team_id
+    
+    # Check if it's the team's turn
+    game_state = await db.game_state.find_one()
+    if not game_state or game_state["current_phase"] != "draft":
+        raise HTTPException(status_code=400, detail="Not in draft phase")
+    
+    current_team_index = game_state.get("current_team_turn", 0)
+    draft_order = game_state.get("draft_order", [])
+    
+    if current_team_index >= len(draft_order):
+        raise HTTPException(status_code=400, detail="Invalid turn index")
+    
+    current_team = draft_order[current_team_index]
+    
+    if current_team != team_id:
+        raise HTTPException(status_code=400, detail="Not your turn")
+    
+    # Move to next team's turn
+    next_turn = (current_team_index + 1) % len(draft_order)
+    await db.game_state.update_one(
+        {"id": game_state["id"]},
+        {"$set": {"current_team_turn": next_turn}}
+    )
+    
+    return {"message": "Turn skipped successfully", "next_turn_index": next_turn}
+
 @api_router.post("/league/start")
 async def start_league():
     """Start the league phase"""

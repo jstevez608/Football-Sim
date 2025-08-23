@@ -392,6 +392,12 @@ async def get_game_state():
     # Convert ObjectId to string for JSON serialization
     if "_id" in game_state:
         game_state["_id"] = str(game_state["_id"])
+    
+    # Add debug information
+    print(f"DEBUG: Game state - Phase: {game_state.get('current_phase')}")
+    print(f"DEBUG: Current team turn: {game_state.get('current_team_turn')}")
+    print(f"DEBUG: Draft order: {game_state.get('draft_order', [])}")
+    
     return game_state
 
 @api_router.post("/draft/start")

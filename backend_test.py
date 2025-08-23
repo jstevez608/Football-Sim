@@ -898,11 +898,13 @@ class FootballDraftAPITester:
                     return False
         
         return success
+
+    def test_set_player_clause(self):
         """Test setting clauses on owned players during league phase - NEW FEATURE"""
         print("\n🎯 TESTING SET PLAYER CLAUSE FUNCTIONALITY")
         
         # Ensure we're in league phase
-        if not self.game_state or self.game_state.get('current_phase') != 'league':
+        if not self.game_state or self.game_state.get('current_phase') not in ['pre_match', 'league']:
             print("❌ Game not in league phase for clause test")
             return False
         

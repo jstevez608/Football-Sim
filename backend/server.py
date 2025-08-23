@@ -862,10 +862,15 @@ async def skip_lineup_turn(team_data: dict):
     )
     
     return {"message": "Turn skipped", "next_turn": next_turn}
+class ReleasePlayerRequest(BaseModel):
+    team_id: str
+    player_id: str
+
+@api_router.post("/teams/{team_id}/set-clause")
 async def set_player_clause(team_id: str, request: SetClauseRequest):
     """Set protection clause for team's own player"""
     game_state = await db.game_state.find_one()
-    if not game_state or game_state["current_phase"] != "league":
+    if not game_state or game_state.get("current_phase") not in ["pre_match", "league"]:
         raise HTTPException(status_code=400, detail="Can only set clauses during league phase")
     
     # Verify team owns the player
@@ -897,11 +902,85 @@ async def set_player_clause(team_id: str, request: SetClauseRequest):
     
     return {"message": "Clause set successfully", "clause_amount": request.clause_amount}
 
+@api_router.post("/teams/release-player")
+async def release_player_to_market(request: ReleasePlayerRequest):
+    """Release player back to free agents market for 90% of original value"""
+    game_state = await db.game_state.find_one()
+    if not game_state or game_state.get("current_phase") not in ["pre_match", "league"]:
+        raise HTTPException(status_code=400, detail="Can only release players during league phase")
+    
+    # Get player and team
+    player = await db.players.find_one({"id": request.player_id})
+    team = await db.teams.find_one({"id": request.team_id})
+    
+    if not player or not team:
+        raise HTTPException(status_code=404, detail="Player or team not found")
+    
+    # Verify player belongs to team
+    if player.get("team_id") != request.team_id:
+        raise HTTPException(status_code=400, detail="Player doesn't belong to your team")
+    
+    # Verify team won't go below 7 players
+    current_player_count = len(team.get("players", []))
+    if current_player_count <= 7:
+        raise HTTPException(
+            status_code=400, 
+            detail="Cannot release player - team must maintain at least 7 players"
+        )
+    
+    # Calculate 90% of original value
+    original_price = player["price"]
+    refund_amount = int(original_price * 0.9)
+    
+    # Release player (remove from team, clear clause)
+    await db.players.update_one(
+        {"id": request.player_id},
+        {"$unset": {"team_id": "", "jersey_number": ""}, 
+         "$set": {"clause_amount": 0, "is_resting": False, "games_played": 0}}
+    )
+    
+    # Update team (remove player from list, add refund)
+    team_players = team.get("players", [])
+    if request.player_id in team_players:
+        team_players.remove(request.player_id)
+    
+    await db.teams.update_one(
+        {"id": request.team_id},
+        {"$set": {"players": team_players}, "$inc": {"budget": refund_amount}}
+    )
+    
+    return {
+        "message": "Player released successfully",
+        "player_name": player["name"],
+        "refund_amount": refund_amount,
+        "original_price": original_price
+    }
+
+@api_router.get("/league/market-status")
+async def get_market_status():
+    """Get current market status (open/closed based on round)"""
+    game_state = await db.game_state.find_one()
+    if not game_state:
+        return {"market_open": False, "reason": "No active game"}
+    
+    current_round = game_state.get("current_round", 1)
+    current_phase = game_state.get("current_phase", "setup")
+    
+    # Market opens after round 7 and closes after round 8
+    market_open = current_round == 7 and current_phase in ["pre_match", "league"]
+    
+    return {
+        "market_open": market_open,
+        "current_round": current_round,
+        "current_phase": current_phase,
+        "reason": "Market opens after round 7 and closes after round 8" if not market_open else "Market is open for free agent signings"
+    }
+
 @api_router.post("/teams/buy-player")
 async def buy_player_from_team(request: BuyPlayerRequest):
     """Buy player from another team during league phase"""
     game_state = await db.game_state.find_one()
-    if not game_state or game_state["current_phase"] != "league":
+    if not game_state or game_state.get("current_phase") not in ["pre_match", "league"]:
         raise HTTPException(status_code=400, detail="Can only buy players during league phase")
     
     # Get player, buyer and seller teams
@@ -957,7 +1036,8 @@ async def buy_player_from_team(request: BuyPlayerRequest):
     
     # Update seller team (remove player, add money)
     seller_players = seller_team.get("players", [])
-    seller_players.remove(request.player_id)
+    if request.player_id in seller_players:
+        seller_players.remove(request.player_id)
     await db.teams.update_one(
         {"id": request.seller_team_id},
         {"$set": {"players": seller_players}, "$inc": {"budget": total_cost}}

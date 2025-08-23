@@ -632,7 +632,11 @@ function App() {
                                   key={player.id}
                                   player={player}
                                   onDraft={draftPlayer}
-                                  currentTeam={teams[gameState.current_team_turn]}
+                                  currentTeam={
+                                    gameState.draft_order && gameState.current_team_turn !== undefined 
+                                      ? teams.find(t => t.id === gameState.draft_order[gameState.current_team_turn])
+                                      : null
+                                  }
                                   gamePhase="draft"
                                 />
                               ))}

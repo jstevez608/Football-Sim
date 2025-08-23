@@ -421,6 +421,18 @@ class DraftPickRequest(BaseModel):
     player_id: str
     clause_amount: int = 0
 
+class DraftSkipRequest(BaseModel):
+    team_id: str
+
+class SetClauseRequest(BaseModel):
+    player_id: str
+    clause_amount: int = Field(..., ge=0)
+
+class BuyPlayerRequest(BaseModel):
+    buyer_team_id: str
+    seller_team_id: str
+    player_id: str
+
 @api_router.post("/draft/pick")
 async def draft_player(request: DraftPickRequest):
     """Draft a player for a team"""

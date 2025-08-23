@@ -1577,7 +1577,7 @@ def main():
     
     failed_tests = []
     
-    for test_name, test_func in tests:
+    for test_name, test_func in all_tests:
         print(f"\n{'='*20} {test_name} {'='*20}")
         try:
             result = test_func()
@@ -1589,7 +1589,7 @@ def main():
     
     # Print final results
     print(f"\n{'='*80}")
-    print(f"📊 FINAL RESULTS - LEAGUE SYSTEM TESTING")
+    print(f"📊 FINAL RESULTS - LEAGUE SYSTEM & TRANSFER MARKET TESTING")
     print(f"{'='*80}")
     print(f"Tests run: {tester.tests_run}")
     print(f"Tests passed: {tester.tests_passed}")
@@ -1606,9 +1606,12 @@ def main():
         print(f"   - Verify league system implementation")
         print(f"   - Test calendar generation logic")
         print(f"   - Validate lineup selection with formations")
+        print(f"   - Check transfer market API implementations")
+        print(f"   - Verify clause system and budget calculations")
+        print(f"   - Test market timing and validation rules")
     else:
-        print(f"\n✅ All league system tests passed!")
-        print(f"🎉 League calendar, formations, and lineup selection working correctly!")
+        print(f"\n✅ All league system and transfer market tests passed!")
+        print(f"🎉 League calendar, formations, lineup selection, and transfer market working correctly!")
     
     return 0 if len(failed_tests) == 0 else 1
 

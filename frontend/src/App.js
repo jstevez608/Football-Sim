@@ -578,6 +578,7 @@ function App() {
                                 player={player}
                                 canEdit={true}
                                 onEdit={setEditingPlayer}
+                                gamePhase="setup"
                               />
                             ))}
                         </div>

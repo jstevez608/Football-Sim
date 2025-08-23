@@ -185,19 +185,56 @@ function App() {
     }
   };
 
-  const buyPlayer = async (buyerTeamId, sellerTeamId, playerId) => {
+  const loadStandings = async () => {
     try {
-      const response = await axios.post(`${API}/teams/buy-player`, {
-        buyer_team_id: buyerTeamId,
-        seller_team_id: sellerTeamId,
-        player_id: playerId
-      });
-      await loadPlayers();
-      await loadTeams();
-      alert(`${response.data.player_name} fichado por ${formatCurrency(response.data.total_cost)}`);
+      const response = await axios.get(`${API}/league/standings`);
+      setStandings(response.data);
     } catch (error) {
-      console.error('Error buying player:', error);
-      alert('Error al comprar jugador: ' + (error.response?.data?.detail || 'Error desconocido'));
+      console.error('Error loading standings:', error);
+    }
+  };
+
+  const loadRoundMatches = async (roundNumber) => {
+    try {
+      const response = await axios.get(`${API}/league/matches/round/${roundNumber}`);
+      setRoundMatches(response.data);
+    } catch (error) {
+      console.error('Error loading round matches:', error);
+    }
+  };
+
+  const loadFormations = async () => {
+    try {
+      const response = await axios.get(`${API}/league/formations`);
+      setFormations(response.data);
+    } catch (error) {
+      console.error('Error loading formations:', error);
+    }
+  };
+
+  const selectLineup = async (teamId, formation, playerIds) => {
+    try {
+      const response = await axios.post(`${API}/league/lineup/select`, {
+        team_id: teamId,
+        formation: formation,
+        players: playerIds
+      });
+      await loadGameState();
+      await loadTeams();
+      setSelectedPlayers([]);
+      alert(response.data.message);
+    } catch (error) {
+      console.error('Error selecting lineup:', error);
+      alert('Error al seleccionar alineación: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
+  const skipLineupTurn = async (teamId) => {
+    try {
+      await axios.post(`${API}/league/lineup/skip-turn`, { team_id: teamId });
+      await loadGameState();
+    } catch (error) {
+      console.error('Error skipping turn:', error);
     }
   };
 

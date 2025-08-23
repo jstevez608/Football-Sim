@@ -287,7 +287,183 @@ function App() {
     return colors[position] || 'bg-gray-500';
   };
 
-  const PlayerEditModal = ({ player, onSave, onClose }) => {
+  const LineupSelectionInterface = ({ 
+    gameState, teams, players, formations, 
+    selectedFormation, setSelectedFormation, 
+    selectedPlayers, setSelectedPlayers,
+    onSelectLineup, onSkipTurn 
+  }) => {
+    const currentTeamIndex = gameState.current_team_turn || 0;
+    const currentTeam = teams[currentTeamIndex];
+    
+    if (!currentTeam) return null;
+    
+    const teamPlayers = players.filter(p => p.team_id === currentTeam.id && !p.is_resting);
+    const currentFormation = formations[selectedFormation];
+    
+    const togglePlayerSelection = (playerId) => {
+      if (selectedPlayers.includes(playerId)) {
+        setSelectedPlayers(selectedPlayers.filter(id => id !== playerId));
+      } else if (selectedPlayers.length < 7) {
+        setSelectedPlayers([...selectedPlayers, playerId]);
+      }
+    };
+    
+    const getPlayersByPosition = (position) => {
+      return teamPlayers.filter(p => p.position === position);
+    };
+    
+    const countSelectedByPosition = (position) => {
+      return selectedPlayers.filter(playerId => {
+        const player = players.find(p => p.id === playerId);
+        return player && player.position === position;
+      }).length;
+    };
+    
+    const canSelectLineup = () => {
+      if (selectedPlayers.length !== 7) return false;
+      if (!currentFormation) return false;
+      
+      const porteros = countSelectedByPosition('PORTERO');
+      const defensas = countSelectedByPosition('DEFENSA');
+      const medios = countSelectedByPosition('MEDIO');
+      const delanteros = countSelectedByPosition('DELANTERO');
+      
+      return (
+        porteros === currentFormation.portero &&
+        defensas === currentFormation.defensas &&
+        medios === currentFormation.medios &&
+        delanteros === currentFormation.delanteros
+      );
+    };
+    
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Selección de Alineación - {currentTeam.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2">
+              <div className="mb-4">
+                <Label className="text-base font-medium">Formación</Label>
+                <div className="grid grid-cols-3 gap-3 mt-2">
+                  {Object.entries(formations).map(([key, formation]) => (
+                    <Button
+                      key={key}
+                      variant={selectedFormation === key ? "default" : "outline"}
+                      onClick={() => {
+                        setSelectedFormation(key);
+                        setSelectedPlayers([]); // Reset selection when changing formation
+                      }}
+                      className="flex flex-col p-3 h-auto"
+                    >
+                      <span className="font-semibold">{formation.name}</span>
+                      <span className="text-xs opacity-75">
+                        {formation.defensas}-{formation.medios}-{formation.delanteros}
+                      </span>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              
+              {currentFormation && (
+                <div className="space-y-4">
+                  <div className="text-sm text-gray-600 mb-4">
+                    Selecciona {currentFormation.portero} portero, {currentFormation.defensas} defensas, {currentFormation.medios} medios y {currentFormation.delanteros} delanteros
+                  </div>
+                  
+                  {['PORTERO', 'DEFENSA', 'MEDIO', 'DELANTERO'].map(position => {
+                    const positionPlayers = getPlayersByPosition(position);
+                    const selectedCount = countSelectedByPosition(position);
+                    const requiredCount = position === 'PORTERO' ? currentFormation.portero :
+                                        position === 'DEFENSA' ? currentFormation.defensas :
+                                        position === 'MEDIO' ? currentFormation.medios :
+                                        currentFormation.delanteros;
+                    
+                    return (
+                      <div key={position}>
+                        <div className="flex justify-between items-center mb-2">
+                          <Label className="font-medium">{position}S</Label>
+                          <Badge variant={selectedCount === requiredCount ? "default" : "secondary"}>
+                            {selectedCount}/{requiredCount}
+                          </Badge>
+                        </div>
+                        <div className="grid md:grid-cols-2 gap-2">
+                          {positionPlayers.map(player => (
+                            <div
+                              key={player.id}
+                              className={`p-3 border rounded cursor-pointer transition-all ${
+                                selectedPlayers.includes(player.id) 
+                                  ? 'border-blue-500 bg-blue-50' 
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                              onClick={() => togglePlayerSelection(player.id)}
+                            >
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <div className="font-medium text-sm">{player.name}</div>
+                                  <div className="text-xs text-gray-500">
+                                    Resistencia: {player.resistance} | Partidos: {player.games_played || 0}
+                                  </div>
+                                </div>
+                                {selectedPlayers.includes(player.id) && (
+                                  <Badge className="text-xs">✓</Badge>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            
+            <div>
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-base font-medium">Jugadores Seleccionados</Label>
+                  <div className="text-sm text-gray-600 mt-1">
+                    {selectedPlayers.length}/7 jugadores
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  {selectedPlayers.map(playerId => {
+                    const player = players.find(p => p.id === playerId);
+                    return player ? (
+                      <div key={playerId} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <span className="text-sm font-medium">{player.name}</span>
+                        <Badge variant="outline" className="text-xs">{player.position}</Badge>
+                      </div>
+                    ) : null;
+                  })}
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  <Button 
+                    onClick={() => onSelectLineup(currentTeam.id, selectedFormation, selectedPlayers)}
+                    disabled={!canSelectLineup()}
+                    className="flex-1"
+                  >
+                    Confirmar Alineación
+                  </Button>
+                  <Button 
+                    variant="outline"
+                    onClick={() => onSkipTurn(currentTeam.id)}
+                  >
+                    Pasar Turno
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
     const [editData, setEditData] = useState({
       name: player.name,
       price: player.price,

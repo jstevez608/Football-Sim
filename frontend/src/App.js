@@ -649,9 +649,13 @@ function App() {
                   <div>
                     <div className="flex gap-2 mb-4">
                       <Button 
-                        onClick={() => skipTurn(teams[gameState.current_team_turn]?.id)}
+                        onClick={() => skipTurn(
+                          gameState.draft_order && gameState.current_team_turn !== undefined 
+                            ? gameState.draft_order[gameState.current_team_turn]
+                            : null
+                        )}
                         variant="outline"
-                        disabled={!teams[gameState.current_team_turn]}
+                        disabled={!gameState.draft_order || gameState.current_team_turn === undefined}
                       >
                         Pasar Turno
                       </Button>

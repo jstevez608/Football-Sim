@@ -477,8 +477,11 @@ async def draft_player(request: DraftPickRequest):
     if player.get("team_id"):
         raise HTTPException(status_code=400, detail="Player already drafted")
     
-    if len(team.get("players", [])) >= 10:
-        raise HTTPException(status_code=400, detail="Team is full")
+    current_player_count = len(team.get("players", []))
+    print(f"DEBUG: Team {team.get('name')} has {current_player_count} players")
+    
+    if current_player_count >= 10:
+        raise HTTPException(status_code=400, detail=f"Team is full (has {current_player_count}/10 players)")
     
     total_cost = player["price"] + clause_amount
     if team["budget"] < total_cost:

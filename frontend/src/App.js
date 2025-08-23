@@ -42,11 +42,13 @@ function App() {
     loadTeams();
     loadStandings();
     loadFormations();
+    loadMarketStatus();
   }, []);
 
   useEffect(() => {
     if (gameState && gameState.current_round) {
       loadRoundMatches(gameState.current_round);
+      loadMarketStatus();
     }
   }, [gameState]);
 

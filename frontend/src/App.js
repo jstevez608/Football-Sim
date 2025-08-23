@@ -185,6 +185,22 @@ function App() {
     }
   };
 
+  const buyPlayer = async (buyerTeamId, sellerTeamId, playerId) => {
+    try {
+      const response = await axios.post(`${API}/teams/buy-player`, {
+        buyer_team_id: buyerTeamId,
+        seller_team_id: sellerTeamId,
+        player_id: playerId
+      });
+      await loadPlayers();
+      await loadTeams();
+      alert(`${response.data.player_name} fichado por ${formatCurrency(response.data.total_cost)}`);
+    } catch (error) {
+      console.error('Error buying player:', error);
+      alert('Error al comprar jugador: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
   const loadStandings = async () => {
     try {
       const response = await axios.get(`${API}/league/standings`);

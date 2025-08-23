@@ -296,18 +296,33 @@ async def root():
 
 @api_router.post("/game/init")
 async def initialize_game():
-    """Initialize a new game with default players"""
-    # Clear existing game state
+    """Initialize a new game, reset teams but keep customized players"""
+    # Clear existing game state and teams (but keep players with user modifications)
     await db.game_state.delete_many({})
-    await db.players.delete_many({})
     await db.teams.delete_many({})
+    await db.matches.delete_many({})
     
-    # Generate initial players
-    players = generate_initial_players()
+    # Check if players already exist (to preserve user modifications)
+    existing_players = await db.players.find().to_list(length=None)
+    players_created = 0
     
-    # Insert players into database
-    for player in players:
-        await db.players.insert_one(player.dict())
+    if not existing_players:
+        # Only generate players if none exist (first time initialization)
+        await db.players.delete_many({})
+        players = generate_initial_players()
+        
+        # Insert players into database
+        for player in players:
+            await db.players.insert_one(player.dict())
+        players_created = len(players)
+    else:
+        # Reset player team assignments but keep their custom stats/names/prices
+        await db.players.update_many(
+            {},
+            {"$unset": {"team_id": "", "jersey_number": ""}, 
+             "$set": {"clause_amount": 0, "is_resting": False, "games_played": 0}}
+        )
+        players_created = len(existing_players)
     
     # Create initial game state
     game_state = GameState(
@@ -315,7 +330,7 @@ async def initialize_game():
     )
     await db.game_state.insert_one(game_state.dict())
     
-    return {"message": "Game initialized", "players_created": len(players)}
+    return {"message": "Game reset successfully", "players_available": players_created}
 
 @api_router.get("/players", response_model=List[Player])
 async def get_players():

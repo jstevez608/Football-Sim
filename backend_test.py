@@ -1148,7 +1148,7 @@ class FootballDraftAPITester:
         return success and success2
 
 def main():
-    print("🚀 Starting Football Draft League API Tests - NEW FEATURES FOCUS")
+    print("🚀 Starting Football Draft League API Tests - LEAGUE SYSTEM FOCUS")
     print("=" * 80)
     
     tester = FootballDraftAPITester()
@@ -1204,17 +1204,23 @@ def main():
         print("❌ Failed to start draft. Stopping tests.")
         return 1
     
-    # Run NEW FEATURE tests
-    print("\n🎯 NEW FEATURES TESTING")
+    # Draft minimum players (7 per team)
+    success = tester.test_draft_players_to_minimum()
+    if not success:
+        print("❌ Failed to draft minimum players. Stopping tests.")
+        return 1
+    
+    # Run LEAGUE SYSTEM tests
+    print("\n🎯 LEAGUE SYSTEM TESTING")
     print("=" * 40)
     
     tests = [
-        ("Skip Turn Functionality", tester.test_skip_turn_functionality),
-        ("Draft Players to Minimum 7", tester.test_draft_players_to_minimum),
-        ("League Start with 7+ Players", tester.test_league_start_with_7_players),
-        ("Set Player Clause", tester.test_set_player_clause),
-        ("Buy Player Between Teams", tester.test_buy_player_between_teams),
-        ("Edge Cases", tester.test_edge_cases),
+        ("League Start & Calendar Generation", tester.test_league_start_comprehensive),
+        ("Calendar Structure Validation", tester.test_calendar_generation),
+        ("Formations Endpoint", tester.test_formations_endpoint),
+        ("Lineup Selection Validation", tester.test_lineup_selection_validation),
+        ("Lineup Selection Edge Cases", tester.test_lineup_selection_edge_cases),
+        ("League Standings", tester.test_standings_endpoint),
     ]
     
     failed_tests = []
@@ -1231,7 +1237,7 @@ def main():
     
     # Print final results
     print(f"\n{'='*80}")
-    print(f"📊 FINAL RESULTS - NEW FEATURES TESTING")
+    print(f"📊 FINAL RESULTS - LEAGUE SYSTEM TESTING")
     print(f"{'='*80}")
     print(f"Tests run: {tester.tests_run}")
     print(f"Tests passed: {tester.tests_passed}")
@@ -1245,10 +1251,12 @@ def main():
         print(f"\n🔧 ACTION ITEMS FOR E1:")
         print(f"   - Review failed tests above")
         print(f"   - Check backend logs for detailed error information")
-        print(f"   - Verify API endpoints are working as expected")
+        print(f"   - Verify league system implementation")
+        print(f"   - Test calendar generation logic")
+        print(f"   - Validate lineup selection with formations")
     else:
-        print(f"\n✅ All new feature tests passed!")
-        print(f"🎉 Skip turn, 7-player league start, and clause/transfer system working correctly!")
+        print(f"\n✅ All league system tests passed!")
+        print(f"🎉 League calendar, formations, and lineup selection working correctly!")
     
     return 0 if len(failed_tests) == 0 else 1
 

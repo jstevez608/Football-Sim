@@ -600,7 +600,11 @@ function App() {
               <CardContent>
                 <div className="mb-4">
                   <p className="text-sm text-gray-600">
-                    Turno actual: <strong>{teams[gameState.current_team_turn]?.name}</strong>
+                    Turno actual: <strong>{
+                      gameState.draft_order && gameState.current_team_turn !== undefined 
+                        ? teams.find(t => t.id === gameState.draft_order[gameState.current_team_turn])?.name || 'Equipo desconocido'
+                        : 'Cargando...'
+                    }</strong>
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     Los equipos pueden fichar hasta 10 jugadores. La liga puede empezar con mínimo 7 jugadores por equipo.

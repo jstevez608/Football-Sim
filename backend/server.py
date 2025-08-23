@@ -407,15 +407,15 @@ async def start_draft():
     if not game_state:
         raise HTTPException(status_code=404, detail="No game found")
     
-    # Randomize draft order
+    # Use cyclic order (sequential) instead of random
     teams = game_state.get("teams", [])
-    random.shuffle(teams)
+    # Keep teams in their original creation order for cyclic turns
     
     await db.game_state.update_one(
         {"id": game_state["id"]},
         {"$set": {
             "current_phase": "draft",
-            "draft_order": teams,
+            "draft_order": teams,  # Sequential order, not shuffled
             "current_team_turn": 0
         }}
     )

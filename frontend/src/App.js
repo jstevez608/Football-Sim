@@ -358,7 +358,7 @@ function App() {
               <CardContent>
                 <div className="flex gap-4 mb-6">
                   <Button onClick={initializeGame} disabled={loading}>
-                    {loading ? 'Inicializando...' : 'Reiniciar Juego'}
+                    {loading ? 'Reiniciando...' : players.length > 0 ? 'Reiniciar Liga' : 'Inicializar Juego'}
                   </Button>
                   {players.length > 0 && (
                     <Badge variant="secondary">

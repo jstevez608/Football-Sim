@@ -736,23 +736,34 @@ def main():
         print("❌ Failed to load players. Stopping tests.")
         return 1
     
-    # Create 8 teams
-    team_configs = [
-        {"name": f"Team {i}", "colors": {"primary": "#FF0000", "secondary": "#FFFFFF"}, "budget": 80000000}
-        for i in range(1, 9)
-    ]
+    # Check if teams already exist
+    tester.test_get_teams()
+    existing_teams = len(tester.teams)
+    print(f"   Existing teams: {existing_teams}")
     
-    for team_config in team_configs:
-        success, response = tester.run_test(
-            f"Create {team_config['name']}",
-            "POST",
-            "teams",
-            200,
-            data=team_config
-        )
-        if not success:
-            print(f"❌ Failed to create {team_config['name']}. Stopping tests.")
-            return 1
+    # Create teams only if we don't have 8 already
+    if existing_teams < 8:
+        teams_to_create = 8 - existing_teams
+        print(f"   Creating {teams_to_create} additional teams...")
+        
+        team_configs = [
+            {"name": f"Team {i}", "colors": {"primary": "#FF0000", "secondary": "#FFFFFF"}, "budget": 80000000}
+            for i in range(existing_teams + 1, 9)
+        ]
+        
+        for team_config in team_configs:
+            success, response = tester.run_test(
+                f"Create {team_config['name']}",
+                "POST",
+                "teams",
+                200,
+                data=team_config
+            )
+            if not success:
+                print(f"❌ Failed to create {team_config['name']}. Stopping tests.")
+                return 1
+    else:
+        print(f"   ✅ Already have {existing_teams} teams, no need to create more")
     
     # Start draft
     success = tester.test_start_draft()

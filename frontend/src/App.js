@@ -758,7 +758,7 @@ function App() {
     );
   };
 
-  const PlayerCard = ({ player, canEdit = false, onEdit, onDraft, onSetClause, onBuyPlayer, currentTeam, gamePhase, allTeams = [] }) => (
+  const PlayerCard = ({ player, canEdit = false, onEdit, onDraft, onSetClause, onBuyPlayer, onReleasePlayer, currentTeam, gamePhase, allTeams = [] }) => (
     <Card className="hover:shadow-lg transition-all">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
@@ -774,6 +774,11 @@ function App() {
             {player.clause_amount > 0 && (
               <div className="text-xs text-orange-600 font-medium">
                 Cláusula: {formatCurrency(player.clause_amount)}
+              </div>
+            )}
+            {player.team_id && allTeams.length > 0 && (
+              <div className="text-xs text-gray-500">
+                Equipo: {allTeams.find(t => t.id === player.team_id)?.name || 'Desconocido'}
               </div>
             )}
           </div>
@@ -803,21 +808,35 @@ function App() {
               Fichar
             </Button>
           )}
-          {onSetClause && player.team_id === currentTeam?.id && gamePhase === 'league' && (
+          {onSetClause && player.team_id === currentTeam?.id && gamePhase === 'pre_match' && (
             <Button 
               size="sm" 
               variant="secondary"
               onClick={() => {
-                const clause = prompt('Introduce el importe de la cláusula (€):', '0');
+                const clause = prompt('Introduce el importe de la cláusula (€):', player.clause_amount?.toString() || '0');
                 if (clause !== null && !isNaN(clause) && parseInt(clause) >= 0) {
                   onSetClause(currentTeam.id, player.id, parseInt(clause));
                 }
               }}
             >
-              Cláusula
+              {player.clause_amount > 0 ? 'Cambiar Cláusula' : 'Establecer Cláusula'}
             </Button>
           )}
-          {onBuyPlayer && player.team_id && player.team_id !== currentTeam?.id && gamePhase === 'league' && (
+          {onReleasePlayer && player.team_id === currentTeam?.id && gamePhase === 'pre_match' && (
+            <Button 
+              size="sm" 
+              variant="destructive"
+              onClick={() => {
+                const refundAmount = Math.floor(player.price * 0.9);
+                if (confirm(`¿Liberar a ${player.name}? Recibirás ${formatCurrency(refundAmount)} (90% del valor original)`)) {
+                  onReleasePlayer(currentTeam.id, player.id);
+                }
+              }}
+            >
+              Liberar
+            </Button>
+          )}
+          {onBuyPlayer && player.team_id && player.team_id !== currentTeam?.id && gamePhase === 'pre_match' && (
             <Button 
               size="sm" 
               variant="destructive"
@@ -825,13 +844,20 @@ function App() {
                 const sellerTeam = allTeams.find(t => t.id === player.team_id);
                 const sellerName = sellerTeam ? sellerTeam.name : 'Equipo desconocido';
                 const totalCost = player.price + (player.clause_amount || 0);
-                if (confirm(`¿Comprar ${player.name} de ${sellerName} por ${formatCurrency(totalCost)}?`)) {
+                const sellerPlayerCount = sellerTeam ? (sellerTeam.players?.length || 0) : 0;
+                
+                if (sellerPlayerCount <= 7) {
+                  alert(`No se puede comprar a ${player.name}. ${sellerName} debe mantener mínimo 7 jugadores.`);
+                  return;
+                }
+                
+                if (confirm(`¿Comprar ${player.name} de ${sellerName} por ${formatCurrency(totalCost)}? (Precio: ${formatCurrency(player.price)} + Cláusula: ${formatCurrency(player.clause_amount || 0)})`)) {
                   onBuyPlayer(currentTeam.id, player.team_id, player.id);
                 }
               }}
               disabled={currentTeam?.players?.length >= 10}
             >
-              Comprar
+              Comprar ({formatCurrency(player.price + (player.clause_amount || 0))})
             </Button>
           )}
         </div>

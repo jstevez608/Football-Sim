@@ -693,6 +693,10 @@ async def get_available_formations():
 async def get_round_matches(round_number: int):
     """Get matches for a specific round"""
     matches = await db.matches.find({"round_number": round_number}).to_list(length=None)
+    # Convert ObjectId to string for JSON serialization
+    for match in matches:
+        if "_id" in match:
+            match["_id"] = str(match["_id"])
     return matches
 
 @api_router.get("/league/standings")

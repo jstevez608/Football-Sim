@@ -143,6 +143,50 @@ function App() {
     }
   };
 
+  const skipTurn = async (teamId) => {
+    try {
+      const response = await axios.post(`${API}/draft/skip-turn`, {
+        team_id: teamId
+      });
+      await loadGameState();
+      console.log('Turn skipped successfully:', response.data);
+    } catch (error) {
+      console.error('Error skipping turn:', error);
+      alert('Error al pasar turno: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
+  const setPlayerClause = async (teamId, playerId, clauseAmount) => {
+    try {
+      await axios.post(`${API}/teams/${teamId}/set-clause`, {
+        player_id: playerId,
+        clause_amount: clauseAmount
+      });
+      await loadPlayers();
+      await loadTeams();
+      alert(`Cláusula de ${formatCurrency(clauseAmount)} establecida correctamente`);
+    } catch (error) {
+      console.error('Error setting clause:', error);
+      alert('Error al establecer cláusula: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
+  const buyPlayer = async (buyerTeamId, sellerTeamId, playerId) => {
+    try {
+      const response = await axios.post(`${API}/teams/buy-player`, {
+        buyer_team_id: buyerTeamId,
+        seller_team_id: sellerTeamId,
+        player_id: playerId
+      });
+      await loadPlayers();
+      await loadTeams();
+      alert(`${response.data.player_name} fichado por ${formatCurrency(response.data.total_cost)}`);
+    } catch (error) {
+      console.error('Error buying player:', error);
+      alert('Error al comprar jugador: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
   const startLeague = async () => {
     try {
       await axios.post(`${API}/league/start`);

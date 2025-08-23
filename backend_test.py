@@ -296,17 +296,17 @@ class FootballDraftAPITester:
                 return False
         return success
 
-    def test_draft_player(self):
-        """Test drafting a player"""
-        # Refresh game state and teams after starting draft
-        self.test_game_state()
-        self.test_get_teams()
+    def test_skip_turn_functionality(self):
+        """Test the skip turn functionality - NEW FEATURE"""
+        print("\n🎯 TESTING NEW SKIP TURN FUNCTIONALITY")
         
-        if not self.game_state or not self.teams or not self.players:
-            print("❌ Missing required data for draft test")
+        # First ensure we're in draft phase and get current state
+        self.test_game_state()
+        
+        if not self.game_state or self.game_state.get('current_phase') != 'draft':
+            print("❌ Game not in draft phase for skip turn test")
             return False
         
-        # Get current team turn
         current_team_index = self.game_state.get('current_team_turn', 0)
         draft_order = self.game_state.get('draft_order', [])
         
@@ -315,23 +315,356 @@ class FootballDraftAPITester:
             return False
         
         current_team_id = draft_order[current_team_index]
+        print(f"   Current team turn: {current_team_id} (index {current_team_index})")
         
-        # Find an available player
+        # Test 1: Skip turn with correct team (should work)
+        success1, response1 = self.run_test(
+            "Skip Turn - Correct Team",
+            "POST",
+            "draft/skip-turn",
+            200,
+            data={"team_id": current_team_id}
+        )
+        
+        if success1:
+            next_turn_index = response1.get('next_turn_index')
+            expected_next = (current_team_index + 1) % len(draft_order)
+            if next_turn_index == expected_next:
+                print(f"✅ Turn correctly advanced to index {next_turn_index}")
+            else:
+                print(f"❌ Turn index incorrect. Expected {expected_next}, got {next_turn_index}")
+                return False
+        
+        # Refresh game state to get new current team
+        self.test_game_state()
+        new_current_team_index = self.game_state.get('current_team_turn', 0)
+        new_current_team_id = draft_order[new_current_team_index]
+        
+        # Test 2: Try to skip turn with wrong team (should fail)
+        wrong_team_id = current_team_id  # This is now the previous team
+        success2, response2 = self.run_test(
+            "Skip Turn - Wrong Team (Should Fail)",
+            "POST",
+            "draft/skip-turn",
+            400,  # Should fail with 400
+            data={"team_id": wrong_team_id}
+        )
+        
+        if success2:
+            print("✅ Correctly rejected skip turn from wrong team")
+        
+        return success1 and success2
+
+    def test_draft_players_to_minimum(self):
+        """Draft players to get teams to minimum 7 players each"""
+        print("\n🎯 DRAFTING PLAYERS TO REACH MINIMUM 7 PER TEAM")
+        
+        # Get available players
+        self.test_get_players()
         available_players = [p for p in self.players if not p.get('team_id')]
-        if not available_players:
-            print("❌ No available players for drafting")
+        
+        if len(available_players) < 56:  # 8 teams * 7 players minimum
+            print(f"❌ Not enough available players. Need 56, have {len(available_players)}")
             return False
         
-        player_to_draft = available_players[0]
+        # Draft 7 players for each team
+        players_drafted = 0
+        target_players_per_team = 7
         
-        # Draft the player using query parameters
+        for round_num in range(target_players_per_team):
+            print(f"\n   Drafting round {round_num + 1}...")
+            
+            for team_index in range(8):  # 8 teams
+                # Get current game state
+                self.test_game_state()
+                current_team_index = self.game_state.get('current_team_turn', 0)
+                draft_order = self.game_state.get('draft_order', [])
+                current_team_id = draft_order[current_team_index]
+                
+                # Get fresh available players
+                self.test_get_players()
+                available_players = [p for p in self.players if not p.get('team_id')]
+                
+                if not available_players:
+                    print(f"❌ No more available players at round {round_num + 1}, team {team_index + 1}")
+                    return False
+                
+                # Draft first available player
+                player_to_draft = available_players[0]
+                
+                success, response = self.run_test(
+                    f"Draft Player {players_drafted + 1} - {player_to_draft['name']} to Team {current_team_index + 1}",
+                    "POST",
+                    "draft/pick",
+                    200,
+                    data={
+                        "team_id": current_team_id,
+                        "player_id": player_to_draft['id'],
+                        "clause_amount": 0
+                    }
+                )
+                
+                if success:
+                    players_drafted += 1
+                    print(f"   ✅ Player {players_drafted} drafted successfully")
+                else:
+                    print(f"❌ Failed to draft player {players_drafted + 1}")
+                    return False
+        
+        print(f"\n✅ Successfully drafted {players_drafted} players ({target_players_per_team} per team)")
+        return True
+
+    def test_league_start_with_7_players(self):
+        """Test starting league with minimum 7 players per team - NEW FEATURE"""
+        print("\n🎯 TESTING LEAGUE START WITH MINIMUM 7 PLAYERS")
+        
+        # Get current teams to verify they have 7+ players
+        self.test_get_teams()
+        
+        teams_ready = 0
+        for team in self.teams:
+            player_count = len(team.get('players', []))
+            print(f"   Team {team['name']}: {player_count} players")
+            if player_count >= 7:
+                teams_ready += 1
+        
+        if teams_ready != 8:
+            print(f"❌ Only {teams_ready}/8 teams have 7+ players")
+            return False
+        
+        print("✅ All teams have 7+ players, attempting to start league...")
+        
+        # Test league start
         success, response = self.run_test(
-            f"Draft Player - {player_to_draft['name']}",
+            "Start League with 7+ Players",
             "POST",
-            f"draft/pick?team_id={current_team_id}&player_id={player_to_draft['id']}",
+            "league/start",
             200
         )
+        
+        if success:
+            matches_created = response.get('matches_created', 0)
+            print(f"   Matches created: {matches_created}")
+            
+            # Verify game state changed to league
+            self.test_game_state()
+            if self.game_state.get('current_phase') == 'league':
+                print("✅ Game phase successfully changed to 'league'")
+                return True
+            else:
+                print(f"❌ Game phase is {self.game_state.get('current_phase')}, expected 'league'")
+                return False
+        
         return success
+
+    def test_set_player_clause(self):
+        """Test setting clauses on owned players during league phase - NEW FEATURE"""
+        print("\n🎯 TESTING SET PLAYER CLAUSE FUNCTIONALITY")
+        
+        # Ensure we're in league phase
+        if not self.game_state or self.game_state.get('current_phase') != 'league':
+            print("❌ Game not in league phase for clause test")
+            return False
+        
+        # Get teams and find a team with players
+        self.test_get_teams()
+        test_team = None
+        test_player = None
+        
+        for team in self.teams:
+            if team.get('players') and len(team['players']) > 0:
+                test_team = team
+                # Get player details
+                self.test_get_players()
+                for player in self.players:
+                    if player['id'] in team['players']:
+                        test_player = player
+                        break
+                break
+        
+        if not test_team or not test_player:
+            print("❌ No team with players found for clause test")
+            return False
+        
+        print(f"   Testing with team: {test_team['name']}")
+        print(f"   Testing with player: {test_player['name']}")
+        print(f"   Team budget: {test_team['budget']}")
+        
+        # Test setting a clause
+        clause_amount = 1000000  # 1M clause
+        
+        success, response = self.run_test(
+            f"Set Clause on {test_player['name']}",
+            "POST",
+            f"teams/{test_team['id']}/set-clause",
+            200,
+            data={
+                "player_id": test_player['id'],
+                "clause_amount": clause_amount
+            }
+        )
+        
+        if success:
+            print(f"✅ Clause of {clause_amount} set successfully")
+            
+            # Verify player has clause and team budget reduced
+            self.test_get_players()
+            updated_player = next((p for p in self.players if p['id'] == test_player['id']), None)
+            if updated_player and updated_player.get('clause_amount') == clause_amount:
+                print("✅ Player clause amount updated correctly")
+            else:
+                print("❌ Player clause amount not updated")
+                return False
+        
+        return success
+
+    def test_buy_player_between_teams(self):
+        """Test buying players between teams during league phase - NEW FEATURE"""
+        print("\n🎯 TESTING BUY PLAYER BETWEEN TEAMS")
+        
+        # Ensure we're in league phase
+        if not self.game_state or self.game_state.get('current_phase') != 'league':
+            print("❌ Game not in league phase for buy player test")
+            return False
+        
+        # Get teams and find buyer/seller
+        self.test_get_teams()
+        
+        # Find a team with >7 players (seller) and a team with <10 players (buyer)
+        seller_team = None
+        buyer_team = None
+        
+        for team in self.teams:
+            player_count = len(team.get('players', []))
+            if player_count > 7 and not seller_team:
+                seller_team = team
+            elif player_count < 10 and not buyer_team and team != seller_team:
+                buyer_team = team
+        
+        if not seller_team or not buyer_team:
+            print("❌ Could not find suitable buyer and seller teams")
+            print(f"   Seller team found: {seller_team is not None}")
+            print(f"   Buyer team found: {buyer_team is not None}")
+            return False
+        
+        # Find a player from seller team
+        self.test_get_players()
+        player_to_buy = None
+        for player in self.players:
+            if player.get('team_id') == seller_team['id']:
+                player_to_buy = player
+                break
+        
+        if not player_to_buy:
+            print("❌ No player found in seller team")
+            return False
+        
+        print(f"   Buyer: {buyer_team['name']} (budget: {buyer_team['budget']})")
+        print(f"   Seller: {seller_team['name']} ({len(seller_team['players'])} players)")
+        print(f"   Player: {player_to_buy['name']} (price: {player_to_buy['price']}, clause: {player_to_buy.get('clause_amount', 0)})")
+        
+        total_cost = player_to_buy['price'] + player_to_buy.get('clause_amount', 0)
+        print(f"   Total cost: {total_cost}")
+        
+        # Test buying the player
+        success, response = self.run_test(
+            f"Buy {player_to_buy['name']} from {seller_team['name']} to {buyer_team['name']}",
+            "POST",
+            "teams/buy-player",
+            200,
+            data={
+                "buyer_team_id": buyer_team['id'],
+                "seller_team_id": seller_team['id'],
+                "player_id": player_to_buy['id']
+            }
+        )
+        
+        if success:
+            print(f"✅ Player purchased successfully for {response.get('total_cost')}")
+            
+            # Verify transfer completed
+            self.test_get_players()
+            self.test_get_teams()
+            
+            updated_player = next((p for p in self.players if p['id'] == player_to_buy['id']), None)
+            if updated_player and updated_player.get('team_id') == buyer_team['id']:
+                print("✅ Player successfully transferred to buyer team")
+            else:
+                print("❌ Player transfer not completed")
+                return False
+        
+        return success
+
+    def test_edge_cases(self):
+        """Test edge cases for the new functionality"""
+        print("\n🎯 TESTING EDGE CASES")
+        
+        # Get current state
+        self.test_get_teams()
+        self.test_get_players()
+        
+        # Test 1: Try to buy player when seller would have <7 players
+        # Find a team with exactly 7 players
+        team_with_7 = None
+        for team in self.teams:
+            if len(team.get('players', [])) == 7:
+                team_with_7 = team
+                break
+        
+        if team_with_7:
+            # Find another team to be buyer
+            buyer_team = next((t for t in self.teams if t['id'] != team_with_7['id'] and len(t.get('players', [])) < 10), None)
+            
+            if buyer_team:
+                # Find a player from the 7-player team
+                player_from_7_team = next((p for p in self.players if p.get('team_id') == team_with_7['id']), None)
+                
+                if player_from_7_team:
+                    success, response = self.run_test(
+                        "Try to buy player from team with only 7 players (Should Fail)",
+                        "POST",
+                        "teams/buy-player",
+                        400,  # Should fail
+                        data={
+                            "buyer_team_id": buyer_team['id'],
+                            "seller_team_id": team_with_7['id'],
+                            "player_id": player_from_7_team['id']
+                        }
+                    )
+                    
+                    if success:
+                        print("✅ Correctly prevented sale that would leave team with <7 players")
+                    else:
+                        print("❌ Should have prevented sale from team with only 7 players")
+                        return False
+        
+        # Test 2: Try to set clause with insufficient budget
+        # Find a team and try to set a clause higher than their budget
+        team_for_clause_test = self.teams[0] if self.teams else None
+        if team_for_clause_test and team_for_clause_test.get('players'):
+            player_for_clause = next((p for p in self.players if p.get('team_id') == team_for_clause_test['id']), None)
+            
+            if player_for_clause:
+                excessive_clause = team_for_clause_test['budget'] + 1000000  # More than budget
+                
+                success, response = self.run_test(
+                    "Try to set clause higher than budget (Should Fail)",
+                    "POST",
+                    f"teams/{team_for_clause_test['id']}/set-clause",
+                    400,  # Should fail
+                    data={
+                        "player_id": player_for_clause['id'],
+                        "clause_amount": excessive_clause
+                    }
+                )
+                
+                if success:
+                    print("✅ Correctly prevented setting clause higher than budget")
+                else:
+                    print("❌ Should have prevented setting excessive clause")
+                    return False
+        
+        return True
 
     def test_budget_validation(self):
         """Test budget validation during drafting"""

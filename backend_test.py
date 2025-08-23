@@ -499,7 +499,405 @@ class FootballDraftAPITester:
         
         return success
 
-    def test_set_player_clause(self):
+    def test_calendar_generation(self):
+        """Test 14-round calendar generation with home/away swapping - NEW FEATURE"""
+        print("\n🎯 TESTING CALENDAR GENERATION")
+        
+        # Test getting matches for each round
+        round_matches_count = []
+        all_matches = []
+        
+        for round_num in range(1, 15):  # Rounds 1-14
+            success, response = self.run_test(
+                f"Get Round {round_num} Matches",
+                "GET",
+                f"league/matches/round/{round_num}",
+                200
+            )
+            
+            if success:
+                matches = response
+                round_matches_count.append(len(matches))
+                all_matches.extend(matches)
+                print(f"   Round {round_num}: {len(matches)} matches")
+                
+                # Verify each round has exactly 4 matches (8 teams ÷ 2)
+                if len(matches) != 4:
+                    print(f"❌ Round {round_num} has {len(matches)} matches, expected 4")
+                    return False
+            else:
+                print(f"❌ Failed to get matches for round {round_num}")
+                return False
+        
+        # Verify total matches
+        total_matches = sum(round_matches_count)
+        if total_matches == 56:
+            print(f"✅ Total matches across all rounds: {total_matches}")
+        else:
+            print(f"❌ Total matches: {total_matches}, expected 56")
+            return False
+        
+        # Verify home/away swapping between first and second half
+        print("\n   Verifying home/away swapping...")
+        first_half_matches = []
+        second_half_matches = []
+        
+        for match in all_matches:
+            if match['round_number'] <= 7:
+                first_half_matches.append(match)
+            else:
+                second_half_matches.append(match)
+        
+        # Check that second half matches are swapped versions of first half
+        swaps_correct = 0
+        for first_match in first_half_matches:
+            corresponding_round = first_match['round_number'] + 7
+            corresponding_match = next((m for m in second_half_matches 
+                                     if m['round_number'] == corresponding_round 
+                                     and m['home_team_id'] == first_match['away_team_id'] 
+                                     and m['away_team_id'] == first_match['home_team_id']), None)
+            if corresponding_match:
+                swaps_correct += 1
+        
+        if swaps_correct == len(first_half_matches):
+            print(f"✅ Home/away swapping correct for all {swaps_correct} matches")
+        else:
+            print(f"❌ Home/away swapping incorrect. Only {swaps_correct}/{len(first_half_matches)} matches swapped correctly")
+            return False
+        
+        # Verify each team plays every other team exactly twice
+        print("\n   Verifying each team plays every other team twice...")
+        team_matchups = {}
+        
+        for match in all_matches:
+            home_id = match['home_team_id']
+            away_id = match['away_team_id']
+            
+            # Create a sorted tuple to represent the matchup
+            matchup = tuple(sorted([home_id, away_id]))
+            
+            if matchup not in team_matchups:
+                team_matchups[matchup] = 0
+            team_matchups[matchup] += 1
+        
+        # Should have 28 unique matchups (8 teams choose 2 = 28), each appearing twice
+        expected_matchups = 28
+        if len(team_matchups) == expected_matchups:
+            print(f"✅ Correct number of unique matchups: {len(team_matchups)}")
+        else:
+            print(f"❌ Expected {expected_matchups} unique matchups, got {len(team_matchups)}")
+            return False
+        
+        # Each matchup should appear exactly twice
+        all_twice = all(count == 2 for count in team_matchups.values())
+        if all_twice:
+            print("✅ Each team plays every other team exactly twice")
+        else:
+            print("❌ Some teams don't play each other exactly twice")
+            return False
+        
+        self.matches = all_matches
+        return True
+
+    def test_formations_endpoint(self):
+        """Test getting available formations - NEW FEATURE"""
+        print("\n🎯 TESTING FORMATIONS ENDPOINT")
+        
+        success, response = self.run_test(
+            "Get Available Formations",
+            "GET",
+            "league/formations",
+            200
+        )
+        
+        if success:
+            self.formations = response
+            print(f"   Formations retrieved: {list(response.keys())}")
+            
+            # Verify we have exactly 3 formations: A, B, C
+            expected_formations = ['A', 'B', 'C']
+            if set(response.keys()) == set(expected_formations):
+                print("✅ All expected formations available (A, B, C)")
+            else:
+                print(f"❌ Expected formations {expected_formations}, got {list(response.keys())}")
+                return False
+            
+            # Verify formation structures
+            expected_structures = {
+                'A': {'name': '4-3-1', 'portero': 1, 'defensas': 2, 'medios': 3, 'delanteros': 1},
+                'B': {'name': '5-2-1', 'portero': 1, 'defensas': 3, 'medios': 2, 'delanteros': 1},
+                'C': {'name': '4-2-2', 'portero': 1, 'defensas': 2, 'medios': 2, 'delanteros': 2}
+            }
+            
+            structures_correct = True
+            for formation_key, expected in expected_structures.items():
+                actual = response.get(formation_key, {})
+                for field, expected_value in expected.items():
+                    if actual.get(field) != expected_value:
+                        print(f"❌ Formation {formation_key} field {field}: expected {expected_value}, got {actual.get(field)}")
+                        structures_correct = False
+            
+            if structures_correct:
+                print("✅ All formation structures correct")
+                # Print formation details
+                for key, formation in response.items():
+                    print(f"   Formation {key}: {formation['name']} - {formation['portero']} GK, {formation['defensas']} DEF, {formation['medios']} MID, {formation['delanteros']} FWD")
+            else:
+                return False
+        
+        return success
+
+    def test_lineup_selection_validation(self):
+        """Test lineup selection with formation validation - NEW FEATURE"""
+        print("\n🎯 TESTING LINEUP SELECTION VALIDATION")
+        
+        # Ensure we're in pre_match phase with lineup selection
+        self.test_game_state()
+        if not self.game_state or self.game_state.get('current_phase') != 'pre_match' or not self.game_state.get('lineup_selection_phase'):
+            print("❌ Game not in lineup selection phase")
+            return False
+        
+        # Get current team turn
+        current_team_index = self.game_state.get('current_team_turn', 0)
+        self.test_get_teams()
+        
+        if current_team_index >= len(self.teams):
+            print("❌ Invalid team turn index")
+            return False
+        
+        current_team = self.teams[current_team_index]
+        print(f"   Testing lineup selection for: {current_team['name']}")
+        
+        # Get team's players
+        self.test_get_players()
+        team_players = [p for p in self.players if p.get('team_id') == current_team['id'] and not p.get('is_resting', False)]
+        
+        if len(team_players) < 7:
+            print(f"❌ Team has only {len(team_players)} available players, need 7")
+            return False
+        
+        print(f"   Team has {len(team_players)} available players")
+        
+        # Group players by position
+        players_by_position = {
+            'PORTERO': [p for p in team_players if p['position'] == 'PORTERO'],
+            'DEFENSA': [p for p in team_players if p['position'] == 'DEFENSA'],
+            'MEDIO': [p for p in team_players if p['position'] == 'MEDIO'],
+            'DELANTERO': [p for p in team_players if p['position'] == 'DELANTERO']
+        }
+        
+        print(f"   Position distribution: GK:{len(players_by_position['PORTERO'])}, DEF:{len(players_by_position['DEFENSA'])}, MID:{len(players_by_position['MEDIO'])}, FWD:{len(players_by_position['DELANTERO'])}")
+        
+        # Test 1: Valid lineup selection with Formation A (4-3-1)
+        if (len(players_by_position['PORTERO']) >= 1 and 
+            len(players_by_position['DEFENSA']) >= 2 and 
+            len(players_by_position['MEDIO']) >= 3 and 
+            len(players_by_position['DELANTERO']) >= 1):
+            
+            selected_players = (
+                [players_by_position['PORTERO'][0]['id']] +
+                [p['id'] for p in players_by_position['DEFENSA'][:2]] +
+                [p['id'] for p in players_by_position['MEDIO'][:3]] +
+                [players_by_position['DELANTERO'][0]['id']]
+            )
+            
+            success1, response1 = self.run_test(
+                "Valid Lineup Selection - Formation A",
+                "POST",
+                "league/lineup/select",
+                200,
+                data={
+                    "team_id": current_team['id'],
+                    "formation": "A",
+                    "players": selected_players
+                }
+            )
+            
+            if success1:
+                print("✅ Valid lineup selection accepted")
+                print(f"   Response: {response1.get('message', 'No message')}")
+                
+                # Check if turn advanced or phase changed
+                next_turn = response1.get('next_turn')
+                next_phase = response1.get('next_phase')
+                
+                if next_phase == 'match':
+                    print("✅ All teams completed lineup selection, moved to match phase")
+                elif next_turn is not None:
+                    print(f"✅ Turn advanced to team {next_turn}")
+                
+                return True
+            else:
+                print("❌ Valid lineup selection rejected")
+                return False
+        else:
+            print("❌ Team doesn't have enough players for Formation A test")
+            
+            # Try to skip turn instead
+            success_skip, response_skip = self.run_test(
+                "Skip Lineup Selection Turn",
+                "POST",
+                "league/lineup/skip-turn",
+                200,
+                data={"team_id": current_team['id']}
+            )
+            
+            if success_skip:
+                print("✅ Successfully skipped lineup selection turn")
+                return True
+            else:
+                print("❌ Failed to skip lineup selection turn")
+                return False
+
+    def test_lineup_selection_edge_cases(self):
+        """Test lineup selection edge cases - NEW FEATURE"""
+        print("\n🎯 TESTING LINEUP SELECTION EDGE CASES")
+        
+        # Get current game state
+        self.test_game_state()
+        if not self.game_state or self.game_state.get('current_phase') != 'pre_match' or not self.game_state.get('lineup_selection_phase'):
+            print("⚠️  Not in lineup selection phase, skipping edge case tests")
+            return True
+        
+        current_team_index = self.game_state.get('current_team_turn', 0)
+        self.test_get_teams()
+        current_team = self.teams[current_team_index]
+        
+        # Test 1: Wrong number of players (6 instead of 7)
+        self.test_get_players()
+        team_players = [p for p in self.players if p.get('team_id') == current_team['id'] and not p.get('is_resting', False)]
+        
+        if len(team_players) >= 6:
+            wrong_count_players = [p['id'] for p in team_players[:6]]  # Only 6 players
+            
+            success1, response1 = self.run_test(
+                "Invalid Lineup - Wrong Player Count (Should Fail)",
+                "POST",
+                "league/lineup/select",
+                400,
+                data={
+                    "team_id": current_team['id'],
+                    "formation": "A",
+                    "players": wrong_count_players
+                }
+            )
+            
+            if success1:
+                print("✅ Correctly rejected lineup with wrong player count")
+            else:
+                print("❌ Should have rejected lineup with wrong player count")
+                return False
+        
+        # Test 2: Invalid formation
+        if len(team_players) >= 7:
+            any_7_players = [p['id'] for p in team_players[:7]]
+            
+            success2, response2 = self.run_test(
+                "Invalid Formation (Should Fail)",
+                "POST",
+                "league/lineup/select",
+                400,
+                data={
+                    "team_id": current_team['id'],
+                    "formation": "X",  # Invalid formation
+                    "players": any_7_players
+                }
+            )
+            
+            if success2:
+                print("✅ Correctly rejected invalid formation")
+            else:
+                print("❌ Should have rejected invalid formation")
+                return False
+        
+        # Test 3: Wrong team trying to select lineup
+        other_team = next((t for t in self.teams if t['id'] != current_team['id']), None)
+        if other_team and len(team_players) >= 7:
+            any_7_players = [p['id'] for p in team_players[:7]]
+            
+            success3, response3 = self.run_test(
+                "Wrong Team Selecting Lineup (Should Fail)",
+                "POST",
+                "league/lineup/select",
+                400,
+                data={
+                    "team_id": other_team['id'],  # Wrong team
+                    "formation": "A",
+                    "players": any_7_players
+                }
+            )
+            
+            if success3:
+                print("✅ Correctly rejected lineup selection from wrong team")
+            else:
+                print("❌ Should have rejected lineup selection from wrong team")
+                return False
+        
+        return True
+
+    def test_standings_endpoint(self):
+        """Test league standings endpoint - NEW FEATURE"""
+        print("\n🎯 TESTING LEAGUE STANDINGS")
+        
+        success, response = self.run_test(
+            "Get League Standings",
+            "GET",
+            "league/standings",
+            200
+        )
+        
+        if success:
+            standings = response
+            print(f"   Standings retrieved for {len(standings)} teams")
+            
+            # Verify all teams are present
+            if len(standings) == 8:
+                print("✅ All 8 teams in standings")
+            else:
+                print(f"❌ Expected 8 teams in standings, got {len(standings)}")
+                return False
+            
+            # Verify standings structure
+            if standings:
+                sample_standing = standings[0]
+                required_fields = ['position', 'team_name', 'team_id', 'points', 'matches_played', 
+                                 'wins', 'draws', 'losses', 'goals_for', 'goals_against', 'goal_difference']
+                
+                structure_valid = all(field in sample_standing for field in required_fields)
+                if structure_valid:
+                    print("✅ Standings structure is valid")
+                else:
+                    print("❌ Standings structure is invalid")
+                    return False
+                
+                # Verify initial values (all should be 0 at start)
+                initial_values_correct = all(
+                    standing['points'] == 0 and 
+                    standing['matches_played'] == 0 and
+                    standing['wins'] == 0 and
+                    standing['draws'] == 0 and
+                    standing['losses'] == 0 and
+                    standing['goals_for'] == 0 and
+                    standing['goals_against'] == 0 and
+                    standing['goal_difference'] == 0
+                    for standing in standings
+                )
+                
+                if initial_values_correct:
+                    print("✅ All teams have initial values (0 points, 0 matches played, etc.)")
+                else:
+                    print("❌ Some teams have non-zero initial values")
+                    return False
+                
+                # Verify positions are sequential 1-8
+                positions = [s['position'] for s in standings]
+                if positions == list(range(1, 9)):
+                    print("✅ Positions are correctly numbered 1-8")
+                else:
+                    print(f"❌ Positions are incorrect: {positions}")
+                    return False
+        
+        return success
         """Test setting clauses on owned players during league phase - NEW FEATURE"""
         print("\n🎯 TESTING SET PLAYER CLAUSE FUNCTIONALITY")
         

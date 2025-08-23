@@ -1559,6 +1559,22 @@ def main():
         ("League Standings", tester.test_standings_endpoint),
     ]
     
+    # Run TRANSFER MARKET tests
+    print("\n🎯 TRANSFER MARKET TESTING")
+    print("=" * 40)
+    
+    transfer_tests = [
+        ("Set Player Clause", tester.test_set_player_clause),
+        ("Release Player Functionality", tester.test_release_player_functionality),
+        ("Buy Player Between Teams", tester.test_buy_player_between_teams),
+        ("Market Status Functionality", tester.test_market_status_functionality),
+        ("Free Agent Drafting During Market", tester.test_free_agent_drafting_during_market),
+        ("Transfer Market Validations", tester.test_transfer_market_validations),
+    ]
+    
+    # Combine all tests
+    all_tests = tests + transfer_tests
+    
     failed_tests = []
     
     for test_name, test_func in tests:

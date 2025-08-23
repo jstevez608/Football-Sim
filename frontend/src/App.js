@@ -507,9 +507,173 @@ function App() {
         </CardContent>
       </Card>
     );
-  };
-
-  const PlayerEditModal = ({ player, onSave, onClose }) => {
+  const TransferMarket = ({ currentTeam, onSetClause, onBuyPlayer, onReleasePlayer, onDraftFreeAgent }) => (
+    <Card>
+      <CardHeader>
+        <CardTitle>Mercado de Transferencias - {currentTeam.name}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="my-team">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="my-team">Mi Equipo</TabsTrigger>
+            <TabsTrigger value="other-teams">Otros Equipos</TabsTrigger>
+            {marketStatus.market_open && (
+              <TabsTrigger value="free-agents">Agentes Libres</TabsTrigger>
+            )}
+          </TabsList>
+          
+          <TabsContent value="my-team" className="mt-4">
+            <div className="mb-4">
+              <h3 className="font-semibold mb-2">Tus Jugadores</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Puedes establecer cláusulas de protección o liberar jugadores (recibes 90% del valor original)
+              </p>
+            </div>
+            
+            <div className="grid md:grid-cols-2 gap-4">
+              {players
+                .filter(p => p.team_id === currentTeam.id)
+                .map(player => (
+                  <Card key={player.id} className="p-4">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <div className="font-medium">{player.name}</div>
+                        <Badge className={`${getPositionBadgeColor(player.position)} text-white text-xs`}>
+                          {player.position}
+                        </Badge>
+                      </div>
+                      <div className="text-right text-sm">
+                        <div className="font-bold text-green-600">{formatCurrency(player.price)}</div>
+                        {player.clause_amount > 0 && (
+                          <div className="text-orange-600">Cláusula: {formatCurrency(player.clause_amount)}</div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          const clause = prompt('Introduce el importe de la cláusula (€):', '0');
+                          if (clause !== null && !isNaN(clause) && parseInt(clause) >= 0) {
+                            onSetClause(currentTeam.id, player.id, parseInt(clause));
+                          }
+                        }}
+                      >
+                        {player.clause_amount > 0 ? 'Modificar Cláusula' : 'Establecer Cláusula'}
+                      </Button>
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => {
+                          const refund = Math.floor(player.price * 0.9);
+                          if (confirm(`¿Liberar a ${player.name}? Recibirás ${formatCurrency(refund)} (90% del valor original)`)) {
+                            onReleasePlayer(currentTeam.id, player.id);
+                          }
+                        }}
+                      >
+                        Liberar
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="other-teams" className="mt-4">
+            <div className="mb-4">
+              <h3 className="font-semibold mb-2">Jugadores de Otros Equipos</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                Precio total = Precio base + Cláusula. El equipo vendedor debe mantener mínimo 7 jugadores.
+              </p>
+            </div>
+            
+            <Tabs defaultValue="PORTERO">
+              <TabsList className="grid w-full grid-cols-4">
+                <TabsTrigger value="PORTERO">Porteros</TabsTrigger>
+                <TabsTrigger value="DEFENSA">Defensas</TabsTrigger>
+                <TabsTrigger value="MEDIO">Medios</TabsTrigger>
+                <TabsTrigger value="DELANTERO">Delanteros</TabsTrigger>
+              </TabsList>
+              
+              {['PORTERO', 'DEFENSA', 'MEDIO', 'DELANTERO'].map(position => (
+                <TabsContent key={position} value={position} className="mt-4">
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                    {players
+                      .filter(player => player.position === position && player.team_id && player.team_id !== currentTeam.id)
+                      .map(player => (
+                        <PlayerCard 
+                          key={player.id}
+                          player={player}
+                          onBuyPlayer={onBuyPlayer}
+                          currentTeam={currentTeam}
+                          gamePhase="league"
+                          allTeams={teams}
+                        />
+                      ))}
+                  </div>
+                </TabsContent>
+              ))}
+            </Tabs>
+          </TabsContent>
+          
+          {marketStatus.market_open && (
+            <TabsContent value="free-agents" className="mt-4">
+              <div className="mb-4">
+                <h3 className="font-semibold mb-2">Agentes Libres</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Mercado abierto en Jornada 7. Puedes fichar jugadores libres.
+                </p>
+              </div>
+              
+              <Tabs defaultValue="PORTERO">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="PORTERO">Porteros</TabsTrigger>
+                  <TabsTrigger value="DEFENSA">Defensas</TabsTrigger>
+                  <TabsTrigger value="MEDIO">Medios</TabsTrigger>
+                  <TabsTrigger value="DELANTERO">Delanteros</TabsTrigger>
+                </TabsList>
+                
+                {['PORTERO', 'DEFENSA', 'MEDIO', 'DELANTERO'].map(position => (
+                  <TabsContent key={position} value={position} className="mt-4">
+                    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                      {players
+                        .filter(player => player.position === position && !player.team_id)
+                        .map(player => (
+                          <Card key={player.id} className="p-4">
+                            <div className="flex justify-between items-start mb-3">
+                              <div>
+                                <div className="font-medium">{player.name}</div>
+                                <Badge className={`${getPositionBadgeColor(player.position)} text-white text-xs`}>
+                                  {player.position}
+                                </Badge>
+                              </div>
+                              <div className="text-right text-sm">
+                                <div className="font-bold text-green-600">{formatCurrency(player.price)}</div>
+                              </div>
+                            </div>
+                            
+                            <Button 
+                              size="sm" 
+                              onClick={() => onDraftFreeAgent(currentTeam.id, player.id)}
+                              disabled={currentTeam.players && currentTeam.players.length >= 10}
+                              className="w-full"
+                            >
+                              Fichar
+                            </Button>
+                          </Card>
+                        ))}
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </TabsContent>
+          )}
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
     const [editData, setEditData] = useState({
       name: player.name,
       price: player.price,

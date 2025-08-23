@@ -86,19 +86,19 @@ def generate_initial_players():
     positions_data = {
         "PORTERO": {
             "count": 8,
-            "base_stats": {"parada": 5, "despeje": 3, "pase": 2, "tiro": 1, "area": 1, "remate": 1, "corner": 2, "penalti": 4, "regate": 1, "robo": 2, "bloqueo": 3}
+            "base_stats": {"parada": 5, "atajada": 5, "despeje": 3, "pase": 2, "tiro": 1, "area": 1, "remate": 1, "corner": 2, "penalti": 4, "regate": 1, "robo": 2, "bloqueo": 3}
         },
         "DEFENSA": {
             "count": 33,
-            "base_stats": {"despeje": 5, "robo": 4, "bloqueo": 4, "pase": 3, "tiro": 2, "area": 2, "remate": 2, "corner": 2, "penalti": 2, "regate": 2, "parada": 1}
+            "base_stats": {"despeje": 5, "robo": 4, "bloqueo": 4, "pase": 3, "tiro": 2, "area": 2, "remate": 2, "corner": 2, "penalti": 2, "regate": 2, "parada": 1, "atajada": 1}
         },
         "MEDIO": {
             "count": 18,
-            "base_stats": {"pase": 5, "corner": 4, "regate": 4, "tiro": 3, "area": 3, "remate": 3, "penalti": 3, "despeje": 3, "robo": 3, "bloqueo": 3, "parada": 1}
+            "base_stats": {"pase": 5, "corner": 4, "regate": 4, "tiro": 3, "area": 3, "remate": 3, "penalti": 3, "despeje": 3, "robo": 3, "bloqueo": 3, "parada": 1, "atajada": 1}
         },
         "DELANTERO": {
             "count": 16,
-            "base_stats": {"remate": 5, "tiro": 5, "penalti": 4, "regate": 4, "area": 4, "pase": 3, "corner": 2, "despeje": 2, "robo": 2, "bloqueo": 2, "parada": 1}
+            "base_stats": {"remate": 5, "tiro": 5, "penalti": 4, "regate": 4, "area": 4, "pase": 3, "corner": 2, "despeje": 2, "robo": 2, "bloqueo": 2, "parada": 1, "atajada": 1}
         }
     }
     

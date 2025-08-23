@@ -335,7 +335,11 @@ async def update_player(player_id: str, player_data: dict):
 @api_router.post("/teams")
 async def create_team(team_data: dict):
     """Create a new team"""
-    team = Team(**team_data)
+    try:
+        team = Team(**team_data)
+    except ValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    
     await db.teams.insert_one(team.dict())
     
     # Update game state with new team

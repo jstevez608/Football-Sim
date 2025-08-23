@@ -33,6 +33,8 @@ function App() {
   const [formations, setFormations] = useState({});
   const [selectedFormation, setSelectedFormation] = useState('A');
   const [selectedPlayers, setSelectedPlayers] = useState([]);
+  const [marketStatus, setMarketStatus] = useState({});
+  const [showTransferMarket, setShowTransferMarket] = useState(false);
 
   useEffect(() => {
     loadGameState();

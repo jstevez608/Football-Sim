@@ -303,7 +303,7 @@ function App() {
     );
   };
 
-  const PlayerCard = ({ player, canEdit = false, onEdit, onDraft, currentTeam }) => (
+  const PlayerCard = ({ player, canEdit = false, onEdit, onDraft, onSetClause, onBuyPlayer, currentTeam, gamePhase, allTeams = [] }) => (
     <Card className="hover:shadow-lg transition-all">
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start">
@@ -316,6 +316,11 @@ function App() {
           <div className="text-right">
             <div className="font-bold text-green-600">{formatCurrency(player.price)}</div>
             <div className="text-sm text-gray-500">Resistencia: {player.resistance}</div>
+            {player.clause_amount > 0 && (
+              <div className="text-xs text-orange-600 font-medium">
+                Cláusula: {formatCurrency(player.clause_amount)}
+              </div>
+            )}
           </div>
         </div>
       </CardHeader>
@@ -328,13 +333,13 @@ function App() {
             </div>
           ))}
         </div>
-        <div className="flex gap-2 mt-3">
+        <div className="flex gap-2 mt-3 flex-wrap">
           {canEdit && (
             <Button size="sm" variant="outline" onClick={() => onEdit(player)}>
               Editar
             </Button>
           )}
-          {onDraft && currentTeam && (
+          {onDraft && currentTeam && gamePhase === 'draft' && (
             <Button 
               size="sm" 
               onClick={() => onDraft(currentTeam.id, player.id)}
@@ -343,10 +348,41 @@ function App() {
               Fichar
             </Button>
           )}
+          {onSetClause && player.team_id === currentTeam?.id && gamePhase === 'league' && (
+            <Button 
+              size="sm" 
+              variant="secondary"
+              onClick={() => {
+                const clause = prompt('Introduce el importe de la cláusula (€):', '0');
+                if (clause !== null && !isNaN(clause) && parseInt(clause) >= 0) {
+                  onSetClause(currentTeam.id, player.id, parseInt(clause));
+                }
+              }}
+            >
+              Cláusula
+            </Button>
+          )}
+          {onBuyPlayer && player.team_id && player.team_id !== currentTeam?.id && gamePhase === 'league' && (
+            <Button 
+              size="sm" 
+              variant="destructive"
+              onClick={() => {
+                const sellerTeam = allTeams.find(t => t.id === player.team_id);
+                const sellerName = sellerTeam ? sellerTeam.name : 'Equipo desconocido';
+                const totalCost = player.price + (player.clause_amount || 0);
+                if (confirm(`¿Comprar ${player.name} de ${sellerName} por ${formatCurrency(totalCost)}?`)) {
+                  onBuyPlayer(currentTeam.id, player.team_id, player.id);
+                }
+              }}
+              disabled={currentTeam?.players?.length >= 10}
+            >
+              Comprar
+            </Button>
+          )}
         </div>
         {player.team_id && (
           <Badge variant="secondary" className="mt-2">
-            Fichado
+            {gamePhase === 'draft' ? 'Fichado' : allTeams.find(t => t.id === player.team_id)?.name || 'Fichado'}
           </Badge>
         )}
       </CardContent>

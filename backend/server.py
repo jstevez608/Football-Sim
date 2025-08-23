@@ -972,9 +972,13 @@ async def buy_player_from_team(request: BuyPlayerRequest):
     }
 
 @api_router.get("/matches/round/{round_number}")
-async def get_round_matches(round_number: int):
-    """Get matches for a specific round"""
+async def get_round_matches_legacy(round_number: int):
+    """Get matches for a specific round (legacy endpoint)"""
     matches = await db.matches.find({"round_number": round_number}).to_list(length=None)
+    # Convert ObjectId to string for JSON serialization
+    for match in matches:
+        if "_id" in match:
+            match["_id"] = str(match["_id"])
     return matches
 
 @api_router.post("/matches/{match_id}/simulate")

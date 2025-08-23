@@ -775,86 +775,110 @@ function App() {
           </div>
         )}
 
-        {currentView === 'league' && gameState && gameState.current_phase === 'league' && (
+        {currentView === 'league' && gameState && (gameState.current_phase === 'league' || gameState.current_phase === 'pre_match' || gameState.current_phase === 'match') && (
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Liga - Jornada {gameState.current_round}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="mb-6">
-                  <p className="text-sm text-gray-600 mb-4">
-                    Durante la liga, los equipos pueden establecer cláusulas de protección a sus jugadores y comprar jugadores de otros equipos.
-                  </p>
-                  
-                  <h3 className="font-semibold mb-4">Mercado de Transferencias</h3>
-                  <Tabs defaultValue="PORTERO">
-                    <TabsList className="grid w-full grid-cols-4">
-                      <TabsTrigger value="PORTERO">Porteros</TabsTrigger>
-                      <TabsTrigger value="DEFENSA">Defensas</TabsTrigger>
-                      <TabsTrigger value="MEDIO">Medios</TabsTrigger>
-                      <TabsTrigger value="DELANTERO">Delanteros</TabsTrigger>
-                    </TabsList>
-                    
-                    {['PORTERO', 'DEFENSA', 'MEDIO', 'DELANTERO'].map(position => (
-                      <TabsContent key={position} value={position} className="mt-4">
-                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                          {players
-                            .filter(player => player.position === position && player.team_id)
-                            .map(player => (
-                              <PlayerCard 
-                                key={player.id}
-                                player={player}
-                                onSetClause={setPlayerClause}
-                                onBuyPlayer={buyPlayer}
-                                currentTeam={teams[0]} // For demo, you'd need to select current team
-                                gamePhase="league"
-                                allTeams={teams}
-                              />
-                            ))}
-                        </div>
-                      </TabsContent>
-                    ))}
-                  </Tabs>
-                </div>
+                {gameState.current_phase === 'pre_match' && gameState.lineup_selection_phase && (
+                  <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <h3 className="font-semibold text-blue-800 mb-2">Fase de Selección de Alineaciones</h3>
+                    <p className="text-sm text-blue-600">
+                      Turno actual: <strong>{teams.find(t => t.id === (teams[gameState.current_team_turn] || {}).id)?.name || 'Cargando...'}</strong>
+                    </p>
+                    <p className="text-xs text-blue-500 mt-1">
+                      Cada equipo debe seleccionar formación y 7 jugadores para el próximo partido.
+                    </p>
+                  </div>
+                )}
                 
-                <div className="grid md:grid-cols-2 gap-6">
+                <div className="grid lg:grid-cols-2 gap-6">
                   <div>
-                    <h3 className="font-semibold mb-3">Clasificación</h3>
-                    <div className="space-y-2">
-                      {teams.map((team, index) => (
-                        <Card key={team.id}>
-                          <CardContent className="p-3">
-                            <div className="flex justify-between items-center">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{index + 1}.</span>
-                                <div 
-                                  className="w-3 h-3 rounded"
-                                  style={{ backgroundColor: team.colors.primary }}
-                                />
-                                <span>{team.name}</span>
-                              </div>
-                              <div className="text-sm text-gray-600">
-                                {team.players?.length || 0} jugadores
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                    <h3 className="font-semibold mb-4">Clasificación</h3>
+                    <Card>
+                      <CardContent className="p-0">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left">Pos</th>
+                                <th className="px-3 py-2 text-left">Equipo</th>
+                                <th className="px-3 py-2 text-center">PJ</th>
+                                <th className="px-3 py-2 text-center">Pts</th>
+                                <th className="px-3 py-2 text-center">GF</th>
+                                <th className="px-3 py-2 text-center">GC</th>
+                                <th className="px-3 py-2 text-center">DG</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {standings.map((team, index) => (
+                                <tr key={team.team_id} className={index < 4 ? 'bg-green-50' : index >= standings.length - 2 ? 'bg-red-50' : ''}>
+                                  <td className="px-3 py-2 font-medium">{team.position}</td>
+                                  <td className="px-3 py-2">{team.team_name}</td>
+                                  <td className="px-3 py-2 text-center">{team.matches_played}</td>
+                                  <td className="px-3 py-2 text-center font-bold">{team.points}</td>
+                                  <td className="px-3 py-2 text-center">{team.goals_for}</td>
+                                  <td className="px-3 py-2 text-center">{team.goals_against}</td>
+                                  <td className="px-3 py-2 text-center">{team.goal_difference > 0 ? '+' : ''}{team.goal_difference}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </div>
                   
                   <div>
-                    <h3 className="font-semibold mb-3">Próximos Partidos</h3>
+                    <h3 className="font-semibold mb-4">Partidos Jornada {gameState.current_round}</h3>
                     <Card>
                       <CardContent className="p-4">
-                        <p className="text-center text-gray-600">
-                          Sistema de partidos en desarrollo...
-                        </p>
+                        <div className="space-y-3">
+                          {roundMatches.map((match, index) => {
+                            const homeTeam = teams.find(t => t.id === match.home_team_id);
+                            const awayTeam = teams.find(t => t.id === match.away_team_id);
+                            return (
+                              <div key={match.id} className="flex justify-between items-center p-3 border rounded">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-medium">{homeTeam?.name || 'Equipo'}</span>
+                                  {match.played && (
+                                    <span className="text-lg font-bold">{match.home_score}</span>
+                                  )}
+                                </div>
+                                <span className="text-gray-500">vs</span>
+                                <div className="flex items-center gap-2">
+                                  {match.played && (
+                                    <span className="text-lg font-bold">{match.away_score}</span>
+                                  )}
+                                  <span className="font-medium">{awayTeam?.name || 'Equipo'}</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </CardContent>
                     </Card>
                   </div>
                 </div>
+
+                {gameState.current_phase === 'pre_match' && gameState.lineup_selection_phase && (
+                  <div className="mt-6">
+                    <LineupSelectionInterface 
+                      gameState={gameState}
+                      teams={teams}
+                      players={players}
+                      formations={formations}
+                      selectedFormation={selectedFormation}
+                      setSelectedFormation={setSelectedFormation}
+                      selectedPlayers={selectedPlayers}
+                      setSelectedPlayers={setSelectedPlayers}
+                      onSelectLineup={selectLineup}
+                      onSkipTurn={skipLineupTurn}
+                    />
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

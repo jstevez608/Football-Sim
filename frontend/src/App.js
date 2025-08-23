@@ -601,6 +601,9 @@ function App() {
                   <p className="text-sm text-gray-600">
                     Turno actual: <strong>{teams[gameState.current_team_turn]?.name}</strong>
                   </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Los equipos pueden fichar hasta 10 jugadores. La liga puede empezar con mínimo 7 jugadores por equipo.
+                  </p>
                 </div>
                 
                 <div className="grid lg:grid-cols-3 gap-6">
@@ -625,6 +628,7 @@ function App() {
                                   player={player}
                                   onDraft={draftPlayer}
                                   currentTeam={teams[gameState.current_team_turn]}
+                                  gamePhase="draft"
                                 />
                               ))}
                           </div>
@@ -634,6 +638,16 @@ function App() {
                   </div>
                   
                   <div>
+                    <div className="flex gap-2 mb-4">
+                      <Button 
+                        onClick={() => skipTurn(teams[gameState.current_team_turn]?.id)}
+                        variant="outline"
+                        disabled={!teams[gameState.current_team_turn]}
+                      >
+                        Pasar Turno
+                      </Button>
+                    </div>
+                    
                     <h3 className="font-semibold mb-4">Estado de Equipos</h3>
                     <div className="space-y-3">
                       {teams.map((team, index) => (
@@ -649,6 +663,9 @@ function App() {
                             <div className="text-xs text-gray-600">
                               <div>Jugadores: {team.players?.length || 0}/10</div>
                               <div>Presupuesto: {formatCurrency(team.budget)}</div>
+                              {(team.players?.length || 0) >= 7 && (
+                                <div className="text-green-600 font-medium">✓ Listo para liga</div>
+                              )}
                             </div>
                           </CardContent>
                         </Card>
@@ -658,9 +675,9 @@ function App() {
                     <Button 
                       onClick={startLeague} 
                       className="w-full mt-4"
-                      disabled={teams.some(team => !team.players || team.players.length === 0)}
+                      disabled={!canStartLeague()}
                     >
-                      Comenzar Liga
+                      {canStartLeague() ? 'Comenzar Liga' : `Equipos necesitan 7+ jugadores`}
                     </Button>
                   </div>
                 </div>
@@ -670,16 +687,88 @@ function App() {
         )}
 
         {currentView === 'league' && gameState && gameState.current_phase === 'league' && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Liga - Jornada {gameState.current_round}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-center text-gray-600">
-                Sistema de liga en desarrollo...
-              </p>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Liga - Jornada {gameState.current_round}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-6">
+                  <p className="text-sm text-gray-600 mb-4">
+                    Durante la liga, los equipos pueden establecer cláusulas de protección a sus jugadores y comprar jugadores de otros equipos.
+                  </p>
+                  
+                  <h3 className="font-semibold mb-4">Mercado de Transferencias</h3>
+                  <Tabs defaultValue="PORTERO">
+                    <TabsList className="grid w-full grid-cols-4">
+                      <TabsTrigger value="PORTERO">Porteros</TabsTrigger>
+                      <TabsTrigger value="DEFENSA">Defensas</TabsTrigger>
+                      <TabsTrigger value="MEDIO">Medios</TabsTrigger>
+                      <TabsTrigger value="DELANTERO">Delanteros</TabsTrigger>
+                    </TabsList>
+                    
+                    {['PORTERO', 'DEFENSA', 'MEDIO', 'DELANTERO'].map(position => (
+                      <TabsContent key={position} value={position} className="mt-4">
+                        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                          {players
+                            .filter(player => player.position === position && player.team_id)
+                            .map(player => (
+                              <PlayerCard 
+                                key={player.id}
+                                player={player}
+                                onSetClause={setPlayerClause}
+                                onBuyPlayer={buyPlayer}
+                                currentTeam={teams[0]} // For demo, you'd need to select current team
+                                gamePhase="league"
+                                allTeams={teams}
+                              />
+                            ))}
+                        </div>
+                      </TabsContent>
+                    ))}
+                  </Tabs>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="font-semibold mb-3">Clasificación</h3>
+                    <div className="space-y-2">
+                      {teams.map((team, index) => (
+                        <Card key={team.id}>
+                          <CardContent className="p-3">
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{index + 1}.</span>
+                                <div 
+                                  className="w-3 h-3 rounded"
+                                  style={{ backgroundColor: team.colors.primary }}
+                                />
+                                <span>{team.name}</span>
+                              </div>
+                              <div className="text-sm text-gray-600">
+                                {team.players?.length || 0} jugadores
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h3 className="font-semibold mb-3">Próximos Partidos</h3>
+                    <Card>
+                      <CardContent className="p-4">
+                        <p className="text-center text-gray-600">
+                          Sistema de partidos en desarrollo...
+                        </p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
       </main>
 

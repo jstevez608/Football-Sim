@@ -13,6 +13,8 @@ class FootballDraftAPITester:
         self.players = []
         self.teams = []
         self.draft_order = []
+        self.matches = []
+        self.formations = {}
 
     def run_test(self, name, method, endpoint, expected_status, data=None, params=None):
         """Run a single API test"""

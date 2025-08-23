@@ -66,12 +66,17 @@ function App() {
   const initializeGame = async () => {
     setLoading(true);
     try {
-      await axios.post(`${API}/game/init`);
+      const response = await axios.post(`${API}/game/init`);
       await loadGameState();
       await loadPlayers();
+      await loadTeams(); // This should now return empty array after reset
       setCurrentView('setup');
+      
+      // Show success message
+      const playersCount = response.data.players_available || 0;
+      console.log(`Game reset successfully. ${playersCount} players available.`);
     } catch (error) {
-      console.error('Error initializing game:', error);
+      console.error('Error resetting game:', error);
     }
     setLoading(false);
   };

@@ -268,23 +268,12 @@ class FootballDraftAPITester:
 
     def test_start_draft(self):
         """Test starting the draft phase"""
-        # First, create enough teams (need 8 total)
-        additional_teams = [
-            {"name": f"Team {i}", "colors": {"primary": "#FF0000", "secondary": "#FFFFFF"}, "budget": 80000000}
-            for i in range(4, 9)  # Create teams 4-8
-        ]
+        # Get current teams
+        self.test_get_teams()
         
-        for team_config in additional_teams:
-            success, response = self.run_test(
-                f"Create Additional Team - {team_config['name']}",
-                "POST",
-                "teams",
-                200,
-                data=team_config
-            )
-            if not success:
-                print("❌ Failed to create additional teams for draft test")
-                return False
+        if len(self.teams) != 8:
+            print(f"❌ Need exactly 8 teams to start draft, have {len(self.teams)}")
+            return False
         
         # Now start draft
         success, response = self.run_test(
@@ -298,6 +287,7 @@ class FootballDraftAPITester:
             print(f"   Draft order set with {len(draft_order)} teams")
             if len(draft_order) == 8:
                 print("✅ Draft order contains all 8 teams")
+                self.draft_order = draft_order
             else:
                 print(f"❌ Expected 8 teams in draft order, got {len(draft_order)}")
                 return False

@@ -303,12 +303,19 @@ async def initialize_game():
     await db.teams.delete_many({})
     await db.matches.delete_many({})
     
-    # Check if players already exist (to preserve user modifications)
-    existing_players = await db.players.find().to_list(length=None)
+    # For this update, we need to regenerate players to include ATAJADA stat
+    # Check if players have the new ATAJADA field
+    sample_player = await db.players.find_one()
+    needs_regeneration = False
+    
+    if sample_player and 'stats' in sample_player:
+        if 'atajada' not in sample_player['stats']:
+            needs_regeneration = True
+    
     players_created = 0
     
-    if not existing_players:
-        # Only generate players if none exist (first time initialization)
+    if not sample_player or needs_regeneration:
+        # Regenerate players if none exist or they don't have ATAJADA stat
         await db.players.delete_many({})
         players = generate_initial_players()
         
@@ -323,7 +330,7 @@ async def initialize_game():
             {"$unset": {"team_id": "", "jersey_number": ""}, 
              "$set": {"clause_amount": 0, "is_resting": False, "games_played": 0}}
         )
-        players_created = len(existing_players)
+        players_created = await db.players.count_documents({})
     
     # Create initial game state
     game_state = GameState(

@@ -1264,7 +1264,7 @@ function App() {
                   </div>
                 </div>
 
-                {gameState.current_phase === 'pre_match' && gameState.lineup_selection_phase && (
+                {gameState.current_phase === 'pre_match' && gameState.lineup_selection_phase && !showTransferMarket && (
                   <div className="mt-6">
                     <LineupSelectionInterface 
                       gameState={gameState}
@@ -1277,6 +1277,18 @@ function App() {
                       setSelectedPlayers={setSelectedPlayers}
                       onSelectLineup={selectLineup}
                       onSkipTurn={skipLineupTurn}
+                    />
+                  </div>
+                )}
+
+                {gameState.current_phase === 'pre_match' && gameState.lineup_selection_phase && showTransferMarket && (
+                  <div className="mt-6">
+                    <TransferMarket 
+                      currentTeam={teams[gameState.current_team_turn] || teams[0]}
+                      onSetClause={setPlayerClause}
+                      onBuyPlayer={buyPlayer}
+                      onReleasePlayer={releasePlayer}
+                      onDraftFreeAgent={draftFreeAgent}
                     />
                   </div>
                 )}

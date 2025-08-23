@@ -123,10 +123,7 @@ function App() {
 
   const draftPlayer = async (teamId, playerId) => {
     try {
-      await axios.post(`${API}/draft/pick`, {
-        team_id: teamId,
-        player_id: playerId
-      });
+      await axios.post(`${API}/draft/pick?team_id=${teamId}&player_id=${playerId}`);
       await loadGameState();
       await loadPlayers();
       await loadTeams();

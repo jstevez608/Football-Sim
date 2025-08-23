@@ -841,7 +841,7 @@ function App() {
           {onBuyPlayer && player.team_id && player.team_id !== currentTeam?.id && gamePhase === 'pre_match' && (
             <Button 
               size="sm" 
-              variant="destructive"
+              className="bg-blue-600 hover:bg-blue-700"
               onClick={() => {
                 const sellerTeam = allTeams.find(t => t.id === player.team_id);
                 const sellerName = sellerTeam ? sellerTeam.name : 'Equipo desconocido';
@@ -853,13 +853,14 @@ function App() {
                   return;
                 }
                 
-                if (confirm(`¿Comprar ${player.name} de ${sellerName} por ${formatCurrency(totalCost)}? (Precio: ${formatCurrency(player.price)} + Cláusula: ${formatCurrency(player.clause_amount || 0)})`)) {
+                const clauseText = player.clause_amount > 0 ? ` + Cláusula: ${formatCurrency(player.clause_amount)}` : '';
+                if (confirm(`¿Comprar ${player.name} de ${sellerName}?\n\nPrecio: ${formatCurrency(player.price)}${clauseText}\nTOTAL: ${formatCurrency(totalCost)}`)) {
                   onBuyPlayer(currentTeam.id, player.team_id, player.id);
                 }
               }}
               disabled={currentTeam?.players?.length >= 10}
             >
-              Comprar ({formatCurrency(player.price + (player.clause_amount || 0))})
+              💰 Comprar por {formatCurrency(player.price + (player.clause_amount || 0))}
             </Button>
           )}
         </div>

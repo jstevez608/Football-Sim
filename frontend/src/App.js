@@ -507,6 +507,8 @@ function App() {
         </CardContent>
       </Card>
     );
+  };
+
   const TransferMarket = ({ currentTeam, onSetClause, onBuyPlayer, onReleasePlayer, onDraftFreeAgent }) => (
     <Card>
       <CardHeader>

@@ -194,7 +194,12 @@ function App() {
       setCurrentView('league');
     } catch (error) {
       console.error('Error starting league:', error);
+      alert('Error al iniciar liga: ' + (error.response?.data?.detail || 'Error desconocido'));
     }
+  };
+
+  const canStartLeague = () => {
+    return teams.every(team => (team.players && team.players.length >= 7));
   };
 
   const formatCurrency = (amount) => {

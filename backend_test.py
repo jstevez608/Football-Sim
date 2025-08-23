@@ -960,6 +960,194 @@ class FootballDraftAPITester:
         
         return success
 
+    def test_release_player_functionality(self):
+        """Test releasing players back to free agents for 90% refund - NEW FEATURE"""
+        print("\n🎯 TESTING RELEASE PLAYER FUNCTIONALITY")
+        
+        # Ensure we're in league phase
+        if not self.game_state or self.game_state.get('current_phase') not in ['pre_match', 'league']:
+            print("❌ Game not in league phase for release player test")
+            return False
+        
+        # Find a team with more than 7 players
+        self.test_get_teams()
+        release_team = None
+        
+        for team in self.teams:
+            if len(team.get('players', [])) > 7:
+                release_team = team
+                break
+        
+        if not release_team:
+            print("❌ No team with >7 players found for release test")
+            return False
+        
+        # Get player details
+        self.test_get_players()
+        player_to_release = None
+        for player in self.players:
+            if player.get('team_id') == release_team['id']:
+                player_to_release = player
+                break
+        
+        if not player_to_release:
+            print("❌ No player found in release team")
+            return False
+        
+        print(f"   Releasing {player_to_release['name']} from {release_team['name']}")
+        print(f"   Original price: {player_to_release['price']}")
+        print(f"   Expected refund (90%): {int(player_to_release['price'] * 0.9)}")
+        
+        # Test releasing the player
+        success, response = self.run_test(
+            f"Release {player_to_release['name']} for 90% refund",
+            "POST",
+            "teams/release-player",
+            200,
+            data={
+                "team_id": release_team['id'],
+                "player_id": player_to_release['id']
+            }
+        )
+        
+        if success:
+            refund_amount = response.get('refund_amount', 0)
+            original_price = response.get('original_price', 0)
+            expected_refund = int(original_price * 0.9)
+            
+            print(f"✅ Player released successfully")
+            print(f"   Refund amount: {refund_amount}")
+            print(f"   Original price: {original_price}")
+            
+            if refund_amount == expected_refund:
+                print("✅ Refund amount is correct (90% of original price)")
+            else:
+                print(f"❌ Refund amount incorrect. Expected {expected_refund}, got {refund_amount}")
+                return False
+            
+            # Verify player is now a free agent
+            self.test_get_players()
+            updated_player = next((p for p in self.players if p['id'] == player_to_release['id']), None)
+            if updated_player and not updated_player.get('team_id'):
+                print("✅ Player successfully became free agent")
+            else:
+                print("❌ Player still has team assignment")
+                return False
+        
+        return success
+
+    def test_market_status_functionality(self):
+        """Test market status API for round-based market opening - NEW FEATURE"""
+        print("\n🎯 TESTING MARKET STATUS FUNCTIONALITY")
+        
+        # Test market status
+        success, response = self.run_test(
+            "Get Market Status",
+            "GET",
+            "league/market-status",
+            200
+        )
+        
+        if success:
+            market_open = response.get('market_open', False)
+            current_round = response.get('current_round', 1)
+            current_phase = response.get('current_phase', 'setup')
+            reason = response.get('reason', '')
+            
+            print(f"   Market open: {market_open}")
+            print(f"   Current round: {current_round}")
+            print(f"   Current phase: {current_phase}")
+            print(f"   Reason: {reason}")
+            
+            # Market should be closed unless we're in round 7
+            if current_round == 7 and current_phase in ['pre_match', 'league']:
+                if market_open:
+                    print("✅ Market correctly open in round 7")
+                else:
+                    print("❌ Market should be open in round 7")
+                    return False
+            else:
+                if not market_open:
+                    print("✅ Market correctly closed outside round 7")
+                else:
+                    print("❌ Market should be closed outside round 7")
+                    return False
+        
+        return success
+
+    def test_free_agent_drafting_during_market(self):
+        """Test drafting free agents during market open period - NEW FEATURE"""
+        print("\n🎯 TESTING FREE AGENT DRAFTING DURING MARKET")
+        
+        # Check if market is open
+        success, market_response = self.run_test(
+            "Check Market Status for Free Agent Test",
+            "GET",
+            "league/market-status",
+            200
+        )
+        
+        if not success:
+            return False
+        
+        market_open = market_response.get('market_open', False)
+        
+        if not market_open:
+            print("⚠️  Market is closed, cannot test free agent drafting")
+            print("   This test would pass if market were open in round 7")
+            return True
+        
+        # Get available free agents
+        self.test_get_players()
+        free_agents = [p for p in self.players if not p.get('team_id')]
+        
+        if not free_agents:
+            print("❌ No free agents available for testing")
+            return False
+        
+        # Find a team with <10 players
+        self.test_get_teams()
+        buyer_team = None
+        for team in self.teams:
+            if len(team.get('players', [])) < 10:
+                buyer_team = team
+                break
+        
+        if not buyer_team:
+            print("❌ No team with <10 players found for free agent test")
+            return False
+        
+        free_agent = free_agents[0]
+        print(f"   Drafting free agent: {free_agent['name']}")
+        print(f"   To team: {buyer_team['name']}")
+        
+        # Test drafting free agent
+        success, response = self.run_test(
+            f"Draft Free Agent {free_agent['name']}",
+            "POST",
+            "draft/pick",
+            200,
+            data={
+                "team_id": buyer_team['id'],
+                "player_id": free_agent['id'],
+                "clause_amount": 0
+            }
+        )
+        
+        if success:
+            print("✅ Free agent drafted successfully during market open period")
+            
+            # Verify player is now on team
+            self.test_get_players()
+            updated_player = next((p for p in self.players if p['id'] == free_agent['id']), None)
+            if updated_player and updated_player.get('team_id') == buyer_team['id']:
+                print("✅ Free agent successfully assigned to team")
+            else:
+                print("❌ Free agent not properly assigned to team")
+                return False
+        
+        return success
+
     def test_buy_player_between_teams(self):
         """Test buying players between teams during league phase - NEW FEATURE"""
         print("\n🎯 TESTING BUY PLAYER BETWEEN TEAMS")

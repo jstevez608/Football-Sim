@@ -610,7 +610,7 @@ function App() {
                           player={player}
                           onBuyPlayer={onBuyPlayer}
                           currentTeam={currentTeam}
-                          gamePhase="league"
+                          gamePhase="pre_match"
                           allTeams={teams}
                         />
                       ))}

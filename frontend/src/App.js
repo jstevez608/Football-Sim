@@ -1179,6 +1179,19 @@ function App() {
                     <p className="text-xs text-blue-500 mt-1">
                       Cada equipo debe seleccionar formación y 7 jugadores para el próximo partido.
                     </p>
+                    <div className="flex gap-2 mt-3">
+                      <Button 
+                        variant="outline" 
+                        onClick={() => setShowTransferMarket(!showTransferMarket)}
+                      >
+                        {showTransferMarket ? 'Volver a Alineación' : 'Mercado de Transferencias'}
+                      </Button>
+                      {marketStatus.market_open && (
+                        <Badge className="bg-green-500">
+                          Mercado Abierto - Jornada 7
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 )}
                 

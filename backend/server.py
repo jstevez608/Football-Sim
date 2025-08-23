@@ -566,6 +566,59 @@ async def skip_draft_turn(request: DraftSkipRequest):
     
     return {"message": "Turn skipped successfully", "next_turn_index": next_turn}
 
+def generate_league_calendar(team_ids):
+    """Generate full league calendar with all teams playing each other twice"""
+    if len(team_ids) != 8:
+        raise ValueError("Need exactly 8 teams for league calendar")
+    
+    matches = []
+    match_id_counter = 1
+    
+    # First round (rounds 1-7): each team plays every other team once
+    for round_num in range(1, 8):
+        round_matches = []
+        teams_in_round = team_ids.copy()
+        
+        # Generate 4 matches per round (8 teams = 4 matches)
+        while len(teams_in_round) >= 2:
+            home_team = teams_in_round.pop(0)
+            away_team = teams_in_round.pop()
+            
+            match = {
+                "id": str(uuid.uuid4()),
+                "home_team_id": home_team,
+                "away_team_id": away_team,
+                "round_number": round_num,
+                "home_score": 0,
+                "away_score": 0,
+                "home_lineup": [],
+                "away_lineup": [],
+                "played": False
+            }
+            round_matches.append(match)
+        
+        matches.extend(round_matches)
+        # Rotate teams for next round
+        team_ids = [team_ids[0]] + [team_ids[-1]] + team_ids[1:-1]
+    
+    # Second round (rounds 8-14): repeat with home/away swapped
+    first_round_matches = matches.copy()
+    for match in first_round_matches:
+        second_match = {
+            "id": str(uuid.uuid4()),
+            "home_team_id": match["away_team_id"],  # Swap home/away
+            "away_team_id": match["home_team_id"],
+            "round_number": match["round_number"] + 7,  # Add 7 rounds
+            "home_score": 0,
+            "away_score": 0,
+            "home_lineup": [],
+            "away_lineup": [],
+            "played": False
+        }
+        matches.append(second_match)
+    
+    return matches
+
 @api_router.post("/league/start")
 async def start_league():
     """Start the league phase - requires minimum 7 players per team"""
@@ -582,31 +635,49 @@ async def start_league():
                 detail=f"Team '{team['name']}' needs at least 7 players (has {player_count})"
             )
     
+    # Update game state
     await db.game_state.update_one(
         {},
-        {"$set": {"current_phase": "league", "current_round": 1}}
+        {"$set": {
+            "current_phase": "pre_match", 
+            "current_round": 1,
+            "current_team_turn": 0,
+            "lineup_selection_phase": True
+        }}
     )
     
-    # Generate match fixtures
+    # Generate full league calendar (14 rounds)
     team_ids = [team["id"] for team in teams]
+    matches = generate_league_calendar(team_ids)
     
-    # Generate all possible matches (round-robin)
-    matches = []
-    for i, home_team in enumerate(team_ids):
-        for j, away_team in enumerate(team_ids):
-            if i != j:
-                match = Match(
-                    home_team_id=home_team,
-                    away_team_id=away_team,
-                    round_number=1  # Will be distributed across rounds
-                )
-                matches.append(match.dict())
-    
-    # Insert matches
-    await db.matches.delete_many({})  # Clear existing matches
+    # Clear existing matches and insert new calendar
+    await db.matches.delete_many({})
     await db.matches.insert_many(matches)
     
-    return {"message": "League started", "matches_created": len(matches)}
+    # Initialize team statistics
+    for team in teams:
+        await db.teams.update_one(
+            {"id": team["id"]},
+            {"$set": {
+                "points": 0,
+                "goals_for": 0,
+                "goals_against": 0,
+                "matches_played": 0,
+                "wins": 0,
+                "draws": 0,
+                "losses": 0,
+                "current_lineup": [],
+                "current_formation": ""
+            }}
+        )
+    
+    # Reset player match counts
+    await db.players.update_many(
+        {},
+        {"$set": {"games_played": 0, "is_resting": False}}
+    )
+    
+    return {"message": "League started", "total_matches": len(matches), "rounds": 14}
 
 @api_router.post("/teams/{team_id}/set-clause")
 async def set_player_clause(team_id: str, request: SetClauseRequest):

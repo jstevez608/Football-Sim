@@ -416,9 +416,18 @@ async def start_draft():
     
     return {"message": "Draft started", "draft_order": teams}
 
+class DraftPickRequest(BaseModel):
+    team_id: str
+    player_id: str
+    clause_amount: int = 0
+
 @api_router.post("/draft/pick")
-async def draft_player(team_id: str, player_id: str, clause_amount: int = 0):
+async def draft_player(request: DraftPickRequest):
     """Draft a player for a team"""
+    team_id = request.team_id
+    player_id = request.player_id
+    clause_amount = request.clause_amount
+    
     # Check if it's the team's turn
     game_state = await db.game_state.find_one()
     if not game_state or game_state["current_phase"] != "draft":

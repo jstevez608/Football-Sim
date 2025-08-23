@@ -221,7 +221,7 @@ class MatchSimulator:
             "AREA": "BLOQUEO",
             "TIRO": "PARADA",
             "REMATE": "PARADA",
-            "PENALTI": "PARADA"
+            "PENALTI": "ATAJADA"
         }
         return defense_map.get(attack_action, "ROBO")
     

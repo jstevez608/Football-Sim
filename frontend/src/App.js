@@ -128,10 +128,15 @@ function App() {
 
   const draftPlayer = async (teamId, playerId) => {
     try {
-      await axios.post(`${API}/draft/pick?team_id=${teamId}&player_id=${playerId}`);
+      const response = await axios.post(`${API}/draft/pick`, {
+        team_id: teamId,
+        player_id: playerId,
+        clause_amount: 0
+      });
       await loadGameState();
       await loadPlayers();
       await loadTeams();
+      console.log('Player drafted successfully:', response.data);
     } catch (error) {
       console.error('Error drafting player:', error);
       alert('Error al fichar jugador: ' + (error.response?.data?.detail || 'Error desconocido'));

@@ -247,12 +247,43 @@ function App() {
     }
   };
 
-  const skipLineupTurn = async (teamId) => {
+  const loadMarketStatus = async () => {
     try {
-      await axios.post(`${API}/league/lineup/skip-turn`, { team_id: teamId });
-      await loadGameState();
+      const response = await axios.get(`${API}/league/market-status`);
+      setMarketStatus(response.data);
     } catch (error) {
-      console.error('Error skipping turn:', error);
+      console.error('Error loading market status:', error);
+    }
+  };
+
+  const releasePlayer = async (teamId, playerId) => {
+    try {
+      const response = await axios.post(`${API}/teams/release-player`, {
+        team_id: teamId,
+        player_id: playerId
+      });
+      await loadPlayers();
+      await loadTeams();
+      alert(`${response.data.player_name} liberado por ${formatCurrency(response.data.refund_amount)} (90% del valor original)`);
+    } catch (error) {
+      console.error('Error releasing player:', error);
+      alert('Error al liberar jugador: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
+
+  const draftFreeAgent = async (teamId, playerId) => {
+    try {
+      const response = await axios.post(`${API}/draft/pick`, {
+        team_id: teamId,
+        player_id: playerId,
+        clause_amount: 0
+      });
+      await loadPlayers();
+      await loadTeams();
+      alert('Jugador libre fichado correctamente');
+    } catch (error) {
+      console.error('Error drafting free agent:', error);
+      alert('Error al fichar jugador libre: ' + (error.response?.data?.detail || 'Error desconocido'));
     }
   };
 

@@ -177,7 +177,7 @@ class MatchSimulationTester:
             return False
         self.game_state = game_state
 
-        # 9. Select lineups for all teams
+        # 9. Select lineups for all teams (following turn order)
         formations = {"A": "4-3-1", "B": "5-2-1", "C": "4-2-2"}
         formation_requirements = {
             "A": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 3, "DELANTERO": 1},
@@ -185,12 +185,25 @@ class MatchSimulationTester:
             "C": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 2, "DELANTERO": 2}
         }
 
-        for team in self.teams:
+        # Select lineups for all 8 teams
+        for lineup_turn in range(8):
+            # Get current game state to find whose turn it is
+            success, game_state = self.run_api_test("Get Game State for Lineup", "GET", "game/state")
+            if not success:
+                return False
+            
+            current_team_index = game_state.get('current_team_turn', 0)
+            current_team = self.teams[current_team_index] if current_team_index < len(self.teams) else None
+            
+            if not current_team:
+                self.log_test("Lineup Turn", False, f"Could not find current team for lineup selection")
+                return False
+            
             # Get team players
-            team_players = [p for p in self.players if p.get('team_id') == team['id']]
+            team_players = [p for p in self.players if p.get('team_id') == current_team['id']]
             
             if len(team_players) < 7:
-                self.log_test(f"Team {team['name']} Players", False, f"Team has only {len(team_players)} players, need 7")
+                self.log_test(f"Team {current_team['name']} Players", False, f"Team has only {len(team_players)} players, need 7")
                 return False
             
             # Select formation A (4-3-1) for simplicity
@@ -205,11 +218,11 @@ class MatchSimulationTester:
             
             if len(selected_players) == 7:
                 success, response = self.run_api_test(
-                    f"Select Lineup for {team['name']}", 
+                    f"Select Lineup for {current_team['name']}", 
                     "POST", 
                     "league/lineup/select",
                     data={
-                        "team_id": team["id"],
+                        "team_id": current_team["id"],
                         "formation": formation,
                         "players": selected_players
                     }
@@ -217,7 +230,7 @@ class MatchSimulationTester:
                 if not success:
                     return False
             else:
-                self.log_test(f"Lineup Selection for {team['name']}", False, f"Could not select 7 players (found {len(selected_players)})")
+                self.log_test(f"Lineup Selection for {current_team['name']}", False, f"Could not select 7 players (found {len(selected_players)})")
                 return False
 
         self.log_test("Complete Game Setup", True, "8 teams with lineups ready for matches")

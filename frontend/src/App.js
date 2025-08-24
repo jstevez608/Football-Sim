@@ -35,6 +35,9 @@ function App() {
   const [selectedPlayers, setSelectedPlayers] = useState([]);
   const [marketStatus, setMarketStatus] = useState({});
   const [showTransferMarket, setShowTransferMarket] = useState(false);
+  const [currentMatch, setCurrentMatch] = useState(null);
+  const [matchResult, setMatchResult] = useState(null);
+  const [showMatchView, setShowMatchView] = useState(false);
 
   useEffect(() => {
     loadGameState();

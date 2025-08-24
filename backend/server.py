@@ -322,14 +322,14 @@ class MatchSimulator:
                 "attacker": {
                     "name": current_attacker["name"],
                     "position": current_attacker["position"],
-                    "stat_value": getattr(current_attacker["stats"], action.lower()),
+                    "stat_value": current_attacker["stats"][action.lower()],
                     "random_bonus": random.randint(1, 3)
                 },
                 "defender": {
                     "name": defender["name"],
                     "position": defender["position"],
                     "defense_action": defense_action,
-                    "stat_value": getattr(defender["stats"], defense_action.lower()),
+                    "stat_value": defender["stats"][defense_action.lower()],
                     "random_bonus": random.randint(1, 3)
                 },
                 "successful": attack_successful,

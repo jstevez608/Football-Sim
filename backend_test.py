@@ -79,7 +79,7 @@ class MatchSimulationTester:
         self.players = players
         self.log_test("Load Players", True, f"Loaded {len(players)} players")
 
-        # 3. Create 8 teams
+        # 3. Create exactly 8 teams
         team_names = ["Real Madrid", "Barcelona", "Atletico", "Valencia", "Sevilla", "Betis", "Athletic", "Villarreal"]
         colors = [
             {"primary": "#FFFFFF", "secondary": "#000000"},
@@ -115,16 +115,18 @@ class MatchSimulationTester:
             return False
         self.log_test("Draft Started", True)
 
-        # 6. Draft players for each team (7 players minimum)
+        # 6. Draft exactly 56 players (7 per team) following turn order
         available_players = [p for p in self.players if not p.get('team_id')]
         random.shuffle(available_players)
         
         player_index = 0
         # Draft 7 rounds of players (each team gets 7 players)
         for round_num in range(7):
+            print(f"   Drafting round {round_num + 1}/7...")
             for team_index in range(8):  # 8 teams
                 if player_index >= len(available_players):
-                    break
+                    self.log_test("Draft", False, f"Ran out of available players at round {round_num + 1}")
+                    return False
                 
                 # Get current game state to find whose turn it is
                 success, game_state = self.run_api_test("Get Game State for Draft", "GET", "game/state")
@@ -133,6 +135,11 @@ class MatchSimulationTester:
                 
                 current_team_index = game_state.get('current_team_turn', 0)
                 draft_order = game_state.get('draft_order', [])
+                
+                if not draft_order or current_team_index >= len(draft_order):
+                    self.log_test("Draft Order", False, f"Invalid draft order or team index")
+                    return False
+                
                 current_team_id = draft_order[current_team_index]
                 current_team = next((t for t in self.teams if t['id'] == current_team_id), None)
                 
@@ -154,6 +161,8 @@ class MatchSimulationTester:
                 if not success:
                     return False
                 player_index += 1
+
+        self.log_test("Draft Completed", True, f"Drafted {player_index} players")
 
         # 7. Start league
         success, response = self.run_api_test("Start League", "POST", "league/start")
@@ -187,6 +196,7 @@ class MatchSimulationTester:
 
         # Select lineups for all 8 teams
         for lineup_turn in range(8):
+            print(f"   Selecting lineup {lineup_turn + 1}/8...")
             # Get current game state to find whose turn it is
             success, game_state = self.run_api_test("Get Game State for Lineup", "GET", "game/state")
             if not success:
@@ -231,6 +241,11 @@ class MatchSimulationTester:
                     return False
             else:
                 self.log_test(f"Lineup Selection for {current_team['name']}", False, f"Could not select 7 players (found {len(selected_players)})")
+                # Print debug info
+                print(f"     Team players by position:")
+                for pos in ["PORTERO", "DEFENSA", "MEDIO", "DELANTERO"]:
+                    pos_players = [p for p in team_players if p['position'] == pos]
+                    print(f"       {pos}: {len(pos_players)} players")
                 return False
 
         self.log_test("Complete Game Setup", True, "8 teams with lineups ready for matches")

@@ -282,9 +282,21 @@ function App() {
     }
   };
 
-  const [currentMatch, setCurrentMatch] = useState(null);
-  const [matchResult, setMatchResult] = useState(null);
-  const [showMatchView, setShowMatchView] = useState(false);
+  const draftFreeAgent = async (teamId, playerId) => {
+    try {
+      const response = await axios.post(`${API}/draft/pick`, {
+        team_id: teamId,
+        player_id: playerId,
+        clause_amount: 0
+      });
+      await loadPlayers();
+      await loadTeams();
+      alert('Jugador libre fichado correctamente');
+    } catch (error) {
+      console.error('Error drafting free agent:', error);
+      alert('Error al fichar jugador libre: ' + (error.response?.data?.detail || 'Error desconocido'));
+    }
+  };
 
   const simulateNextMatch = async () => {
     try {

@@ -120,18 +120,33 @@ class MatchSimulationTester:
         random.shuffle(available_players)
         
         player_index = 0
-        for team in self.teams:
-            for _ in range(7):  # Draft 7 players per team
+        # Draft 7 rounds of players (each team gets 7 players)
+        for round_num in range(7):
+            for team_index in range(8):  # 8 teams
                 if player_index >= len(available_players):
                     break
                 
+                # Get current game state to find whose turn it is
+                success, game_state = self.run_api_test("Get Game State for Draft", "GET", "game/state")
+                if not success:
+                    return False
+                
+                current_team_index = game_state.get('current_team_turn', 0)
+                draft_order = game_state.get('draft_order', [])
+                current_team_id = draft_order[current_team_index]
+                current_team = next((t for t in self.teams if t['id'] == current_team_id), None)
+                
+                if not current_team:
+                    self.log_test("Draft Turn", False, f"Could not find current team")
+                    return False
+                
                 player = available_players[player_index]
                 success, response = self.run_api_test(
-                    f"Draft {player['name']} to {team['name']}", 
+                    f"Draft {player['name']} to {current_team['name']}", 
                     "POST", 
                     "draft/pick",
                     data={
-                        "team_id": team["id"],
+                        "team_id": current_team_id,
                         "player_id": player["id"],
                         "clause_amount": 0
                     }

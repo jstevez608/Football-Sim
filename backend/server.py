@@ -1138,6 +1138,10 @@ async def buy_player_from_team(request: BuyPlayerRequest):
             detail=f"Insufficient budget. Need {total_cost}, have {buyer_team['budget']}"
         )
     
+    # Check if player was in seller team's current lineup
+    seller_current_lineup = seller_team.get("current_lineup", [])
+    player_was_in_lineup = request.player_id in seller_current_lineup
+    
     # Transfer player
     await db.players.update_one(
         {"id": request.player_id},
@@ -1156,18 +1160,209 @@ async def buy_player_from_team(request: BuyPlayerRequest):
     seller_players = seller_team.get("players", [])
     if request.player_id in seller_players:
         seller_players.remove(request.player_id)
-    await db.teams.update_one(
-        {"id": request.seller_team_id},
-        {"$set": {"players": seller_players}, "$inc": {"budget": total_cost}}
-    )
     
-    return {
+    # If player was in lineup, remove from lineup and clear formation
+    lineup_affected = False
+    if player_was_in_lineup:
+        new_lineup = [pid for pid in seller_current_lineup if pid != request.player_id]
+        await db.teams.update_one(
+            {"id": request.seller_team_id},
+            {"$set": {
+                "players": seller_players, 
+                "current_lineup": new_lineup,
+                "current_formation": "",  # Clear formation since lineup is now invalid
+                "needs_replacement_turn": True  # Flag that this team needs an extra turn
+            }, "$inc": {"budget": total_cost}}
+        )
+        lineup_affected = True
+        
+        # Give seller team an additional turn if we're in lineup selection phase
+        if game_state.get("lineup_selection_phase") and game_state.get("current_phase") == "pre_match":
+            # Mark that seller team needs to re-select lineup
+            await handle_lineup_disruption(seller_team["id"], player["name"])
+    else:
+        await db.teams.update_one(
+            {"id": request.seller_team_id},
+            {"$set": {"players": seller_players}, "$inc": {"budget": total_cost}}
+        )
+    
+    response_data = {
         "message": "Player purchased successfully",
         "player_name": player["name"],
         "total_cost": total_cost,
         "base_price": base_price,
-        "clause_amount": clause_amount
+        "clause_amount": clause_amount,
+        "lineup_affected": lineup_affected
     }
+    
+    if lineup_affected:
+        response_data["additional_message"] = f"{seller_team['name']} must select a replacement player as {player['name']} was in their lineup"
+    
+    return response_data
+
+async def handle_lineup_disruption(affected_team_id, transferred_player_name):
+    """Handle when a team loses a player from their current lineup"""
+    game_state = await db.game_state.find_one()
+    if not game_state:
+        return
+    
+    # If we're in lineup selection phase, we need to handle this carefully
+    if game_state.get("lineup_selection_phase") and game_state.get("current_phase") == "pre_match":
+        # Get current turn info
+        current_team_turn = game_state.get("current_team_turn", 0)
+        teams = await db.teams.find().to_list(length=None)
+        
+        # Check how many teams still need to complete their lineups
+        teams_without_lineup = []
+        affected_team_needs_turn = False
+        
+        for i, team in enumerate(teams):
+            current_lineup = team.get("current_lineup", [])
+            needs_replacement = team.get("needs_replacement_turn", False)
+            
+            # Team needs a turn if they don't have a valid lineup or need replacement
+            if len(current_lineup) != 7 or needs_replacement:
+                teams_without_lineup.append(team["id"])
+                if team["id"] == affected_team_id:
+                    affected_team_needs_turn = True
+        
+        # If affected team needs a turn but it's not their current turn, 
+        # we need to adjust the turn order
+        if affected_team_needs_turn and len(teams_without_lineup) > 0:
+            # Create a custom turn order that prioritizes the affected team
+            current_team_id = teams[current_team_turn]["id"] if current_team_turn < len(teams) else None
+            
+            # If it's not the affected team's turn, make it their turn next
+            if current_team_id != affected_team_id:
+                # Insert the affected team as next in turn order by creating a special flag
+                await db.teams.update_one(
+                    {"id": affected_team_id},
+                    {"$set": {"priority_turn": True}}
+                )
+    
+    # Log the disruption for debugging
+    print(f"Lineup disruption handled: Team {affected_team_id} lost {transferred_player_name} from lineup")
+
+@api_router.post("/league/lineup/select")
+async def select_team_lineup(lineup: LineupSelection):
+    """Select team lineup and formation for current round"""
+    game_state = await db.game_state.find_one()
+    if not game_state or game_state.get("current_phase") != "pre_match":
+        raise HTTPException(status_code=400, detail="Not in pre-match phase")
+    
+    if not game_state.get("lineup_selection_phase"):
+        raise HTTPException(status_code=400, detail="Not in lineup selection phase")
+    
+    # Get all teams
+    teams = await db.teams.find().to_list(length=None)
+    current_team_index = game_state.get("current_team_turn", 0)
+    
+    # Check if this team has priority turn due to lineup disruption
+    requesting_team = await db.teams.find_one({"id": lineup.team_id})
+    if requesting_team and requesting_team.get("priority_turn"):
+        # This team has priority, allow them to select
+        current_team = requesting_team
+    else:
+        # Normal turn order
+        if current_team_index >= len(teams):
+            raise HTTPException(status_code=400, detail="Invalid team turn")
+        
+        current_team = teams[current_team_index]
+        if current_team["id"] != lineup.team_id:
+            raise HTTPException(status_code=400, detail="Not your turn to select lineup")
+    
+    # Validate formation
+    formations = {
+        "A": {"portero": 1, "defensas": 2, "medios": 3, "delanteros": 1},
+        "B": {"portero": 1, "defensas": 3, "medios": 2, "delanteros": 1},
+        "C": {"portero": 1, "defensas": 2, "medios": 2, "delanteros": 2}
+    }
+    
+    if lineup.formation not in formations:
+        raise HTTPException(status_code=400, detail="Invalid formation")
+    
+    formation = formations[lineup.formation]
+    
+    # Validate lineup length
+    if len(lineup.players) != 7:
+        raise HTTPException(status_code=400, detail="Must select exactly 7 players")
+    
+    # Get selected players and validate they belong to the team
+    selected_players = await db.players.find({"id": {"$in": lineup.players}}).to_list(length=None)
+    
+    if len(selected_players) != 7:
+        raise HTTPException(status_code=400, detail="Some selected players not found")
+    
+    # Check all players belong to the team
+    for player in selected_players:
+        if player.get("team_id") != lineup.team_id:
+            raise HTTPException(status_code=400, detail=f"Player {player['name']} doesn't belong to your team")
+    
+    # Check players are available (not resting due to resistance)
+    for player in selected_players:
+        if player.get("is_resting", False):
+            raise HTTPException(status_code=400, detail=f"Player {player['name']} is resting and cannot play")
+    
+    # Validate formation requirements
+    position_counts = {"PORTERO": 0, "DEFENSA": 0, "MEDIO": 0, "DELANTERO": 0}
+    for player in selected_players:
+        position_counts[player["position"]] += 1
+    
+    if (position_counts["PORTERO"] != formation["portero"] or
+        position_counts["DEFENSA"] != formation["defensas"] or
+        position_counts["MEDIO"] != formation["medios"] or
+        position_counts["DELANTERO"] != formation["delanteros"]):
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Formation {lineup.formation} requires {formation['portero']} GK, {formation['defensas']} DEF, {formation['medios']} MID, {formation['delanteros']} FWD"
+        )
+    
+    # Update team with selected lineup and clear any special flags
+    await db.teams.update_one(
+        {"id": lineup.team_id},
+        {"$set": {
+            "current_lineup": lineup.players,
+            "current_formation": lineup.formation
+        }, "$unset": {
+            "needs_replacement_turn": "",
+            "priority_turn": ""
+        }}
+    )
+    
+    # Determine next turn
+    # First, check if there are any teams with priority turns
+    priority_team = await db.teams.find_one({"priority_turn": True})
+    if priority_team:
+        # Let the priority team go next by not changing the turn
+        return {"message": "Lineup selected successfully. Priority team will go next.", "priority_turn": True}
+    
+    # Normal turn progression
+    next_turn = (current_team_index + 1) % len(teams)
+    
+    # Check if all teams have selected lineups
+    teams_with_lineups = await db.teams.count_documents({
+        "current_lineup": {"$exists": True, "$ne": []},
+        "$expr": {"$eq": [{"$size": "$current_lineup"}, 7]}
+    })
+    
+    if teams_with_lineups == len(teams):
+        # All teams have valid lineups, move to match phase
+        await db.game_state.update_one(
+            {"id": game_state["id"]},
+            {"$set": {
+                "lineup_selection_phase": False,
+                "current_phase": "match",
+                "current_team_turn": 0
+            }}
+        )
+        return {"message": "Lineup selected. All teams ready - proceeding to matches!", "next_phase": "match"}
+    
+    await db.game_state.update_one(
+        {"id": game_state["id"]},
+        {"$set": {"current_team_turn": next_turn}}
+    )
+    
+    return {"message": "Lineup selected successfully", "next_turn": next_turn}
 
 @api_router.get("/matches/round/{round_number}")
 async def get_round_matches_legacy(round_number: int):

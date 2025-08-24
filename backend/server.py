@@ -1331,6 +1331,12 @@ async def update_player_resistance(player_ids):
                 }}
             )
 
+@api_router.get("/matches/round/{round_number}")
+async def get_round_matches(round_number: int):
+    """Get matches for a specific round"""
+    matches = await db.matches.find({"round_number": round_number}).to_list(length=None)
+    return matches
+
 @api_router.get("/matches/round/{round_number}/current")
 async def get_current_round_status(round_number: int):
     """Get status of current round matches"""

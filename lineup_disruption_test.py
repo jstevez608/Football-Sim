@@ -316,45 +316,45 @@ class LineupDisruptionTester:
         """Test buying a player who IS in seller's lineup (disruption case)"""
         print("\n⚠️ Testing Lineup Disruption Transfer...")
         
-        # Find Team C and Team D
-        team_c = next((t for t in self.teams if t['name'] == 'Team C'), None)
-        team_d = next((t for t in self.teams if t['name'] == 'Team D'), None)
+        # Find Team F and Team E (both have goalkeepers)
+        team_f = next((t for t in self.teams if t['name'] == 'Team F'), None)
+        team_e = next((t for t in self.teams if t['name'] == 'Team E'), None)
         
-        if not team_c or not team_d:
-            self.log_test("Find Teams C and D", False, "Could not find Team C or Team D")
+        if not team_f or not team_e:
+            self.log_test("Find Teams F and E", False, "Could not find Team F or Team E")
             return False
 
-        # Get Team C's players
-        team_c_players = [p for p in self.players if p.get('team_id') == team_c['id']]
-        if len(team_c_players) < 7:
-            self.log_test("Team C Players", False, f"Team C has only {len(team_c_players)} players")
+        # Get Team F's players
+        team_f_players = [p for p in self.players if p.get('team_id') == team_f['id']]
+        if len(team_f_players) < 7:
+            self.log_test("Team F Players", False, f"Team F has only {len(team_f_players)} players")
             return False
 
-        # Select a lineup for Team C
-        formation_key, formation_requirements = self.find_valid_formation_for_team(team_c_players)
+        # Select a lineup for Team F
+        formation_key, formation_requirements = self.find_valid_formation_for_team(team_f_players)
         if not formation_key:
-            self.log_test("Team C Formation", False, "Team C cannot form any valid formation")
+            self.log_test("Team F Formation", False, "Team F cannot form any valid formation")
             return False
         
         # Select players by position for lineup
         lineup_players = []
         lineup_player_objects = []
         for position, count in formation_requirements.items():
-            position_players = [p for p in team_c_players if p['position'] == position][:count]
+            position_players = [p for p in team_f_players if p['position'] == position][:count]
             lineup_players.extend([p['id'] for p in position_players])
             lineup_player_objects.extend(position_players)
         
         if len(lineup_players) != 7:
-            self.log_test("Team C Lineup Selection", False, f"Could not select 7 players for lineup")
+            self.log_test("Team F Lineup Selection", False, f"Could not select 7 players for lineup")
             return False
 
-        # Select lineup for Team C
+        # Select lineup for Team F
         success, response = self.run_api_test(
-            "Select Team C Lineup", 
+            "Select Team F Lineup", 
             "POST", 
             "league/lineup/select",
             data={
-                "team_id": team_c["id"],
+                "team_id": team_f["id"],
                 "formation": formation_key,
                 "players": lineup_players
             }
@@ -379,8 +379,8 @@ class LineupDisruptionTester:
             "POST", 
             "teams/buy-player",
             data={
-                "buyer_team_id": team_d["id"],
-                "seller_team_id": team_c["id"],
+                "buyer_team_id": team_e["id"],
+                "seller_team_id": team_f["id"],
                 "player_id": target_player["id"]
             }
         )
@@ -400,41 +400,41 @@ class LineupDisruptionTester:
 
         self.log_test("Lineup Disruption Response", True, "Transfer correctly marked as affecting lineup with proper message")
 
-        # Verify Team C has disruption flags
+        # Verify Team F has disruption flags
         success, updated_teams = self.run_api_test("Load Updated Teams After Disruption", "GET", "teams")
         if not success:
             return False
 
-        updated_team_c = next((t for t in updated_teams if t['id'] == team_c['id']), None)
-        if not updated_team_c:
-            self.log_test("Find Updated Team C", False, "Could not find updated Team C")
+        updated_team_f = next((t for t in updated_teams if t['id'] == team_f['id']), None)
+        if not updated_team_f:
+            self.log_test("Find Updated Team F", False, "Could not find updated Team F")
             return False
 
-        if not updated_team_c.get('needs_replacement_turn'):
-            self.log_test("Team C Replacement Flag", False, "Team C missing needs_replacement_turn flag")
+        if not updated_team_f.get('needs_replacement_turn'):
+            self.log_test("Team F Replacement Flag", False, "Team F missing needs_replacement_turn flag")
             return False
 
-        self.log_test("Team C Replacement Flag", True, "Team C correctly has needs_replacement_turn flag")
+        self.log_test("Team F Replacement Flag", True, "Team F correctly has needs_replacement_turn flag")
 
-        # Verify Team C's lineup was updated (player removed)
-        current_lineup = updated_team_c.get('current_lineup', [])
+        # Verify Team F's lineup was updated (player removed)
+        current_lineup = updated_team_f.get('current_lineup', [])
         if target_player['id'] in current_lineup:
-            self.log_test("Lineup Player Removal", False, "Sold player still in Team C's lineup")
+            self.log_test("Lineup Player Removal", False, "Sold player still in Team F's lineup")
             return False
 
         if len(current_lineup) != 6:  # Should be 6 after removing 1 player
             self.log_test("Lineup Size After Removal", False, f"Expected 6 players in lineup, got {len(current_lineup)}")
             return False
 
-        self.log_test("Lineup Player Removal", True, "Sold player correctly removed from Team C's lineup")
+        self.log_test("Lineup Player Removal", True, "Sold player correctly removed from Team F's lineup")
 
-        # Verify Team C's formation was cleared
-        current_formation = updated_team_c.get('current_formation', '')
+        # Verify Team F's formation was cleared
+        current_formation = updated_team_f.get('current_formation', '')
         if current_formation:
-            self.log_test("Formation Clearing", False, f"Team C's formation not cleared: {current_formation}")
+            self.log_test("Formation Clearing", False, f"Team F's formation not cleared: {current_formation}")
             return False
 
-        self.log_test("Formation Clearing", True, "Team C's formation correctly cleared")
+        self.log_test("Formation Clearing", True, "Team F's formation correctly cleared")
 
         return True
 

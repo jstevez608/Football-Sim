@@ -201,7 +201,14 @@ function App() {
       });
       await loadPlayers();
       await loadTeams();
-      alert(`${response.data.player_name} fichado por ${formatCurrency(response.data.total_cost)}`);
+      
+      let message = `${response.data.player_name} fichado por ${formatCurrency(response.data.total_cost)}`;
+      
+      if (response.data.lineup_affected) {
+        message += `\n\n⚠️ IMPORTANTE: ${response.data.additional_message}`;
+      }
+      
+      alert(message);
     } catch (error) {
       console.error('Error buying player:', error);
       alert('Error al comprar jugador: ' + (error.response?.data?.detail || 'Error desconocido'));

@@ -328,8 +328,10 @@ class LineupDisruptionTester:
             return False
 
         # Select a lineup for Team C
-        formations = {"A": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 3, "DELANTERO": 1}}
-        formation_requirements = formations["A"]
+        formation_key, formation_requirements = self.find_valid_formation_for_team(team_c_players)
+        if not formation_key:
+            self.log_test("Team C Formation", False, "Team C cannot form any valid formation")
+            return False
         
         # Select players by position for lineup
         lineup_players = []
@@ -350,7 +352,7 @@ class LineupDisruptionTester:
             "league/lineup/select",
             data={
                 "team_id": team_c["id"],
-                "formation": "A",
+                "formation": formation_key,
                 "players": lineup_players
             }
         )

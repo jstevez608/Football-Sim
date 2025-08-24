@@ -705,6 +705,64 @@ function App() {
     </Card>
   );
 
+  const MatchViewer = ({ matchResult, onClose }) => {
+    if (!matchResult || !matchResult.match_log) return null;
+    
+    const { match_log } = matchResult;
+    
+    return (
+      <Card className="w-full max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle className="text-center">
+            {matchResult.home_team} {matchResult.home_score} - {matchResult.away_score} {matchResult.away_team}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="text-center text-lg font-semibold">
+              Resultado Final: {matchResult.home_team} {matchResult.home_score} - {matchResult.away_score} {matchResult.away_team}
+            </div>
+            
+            <div className="max-h-96 overflow-y-auto space-y-3">
+              {match_log.turns && match_log.turns.map((turn, index) => (
+                <div key={index} className="border rounded p-3">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium">Turno {turn.turn}: {turn.attacking_team} ataca</span>
+                    {turn.goal_scored && (
+                      <Badge className="bg-green-500">¡GOL!</Badge>
+                    )}
+                  </div>
+                  
+                  {turn.actions && turn.actions.map((action, actionIndex) => (
+                    <div key={actionIndex} className="text-sm ml-4 mb-1">
+                      <div className="flex justify-between items-center">
+                        <span>
+                          {action.attacker.name} ({action.attacker.position}) - {action.action}
+                          {action.successful ? ' ✅' : ' ❌'}
+                        </span>
+                        {action.is_goal && <span className="text-green-600 font-bold">¡GOL!</span>}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        Ataque: {action.attacker.stat_value} + {action.attacker.random_bonus} = {action.attacker.total} | 
+                        Defensa: {action.defender.name} ({action.defender.position}) - {action.defender.defense_action}: {action.defender.stat_value} + {action.defender.random_bonus} = {action.defender.total}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            
+            <div className="text-center">
+              <Button onClick={onClose}>
+                Continuar
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   const PlayerEditModal = ({ player, onSave, onClose }) => {
     const [editData, setEditData] = useState({
       name: player.name,

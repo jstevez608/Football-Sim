@@ -1180,19 +1180,44 @@ async def get_round_matches_legacy(round_number: int):
     return matches
 
 @api_router.post("/matches/{match_id}/simulate")
-async def simulate_match(match_id: str, home_lineup: List[str], away_lineup: List[str]):
-    """Simulate a match"""
+async def simulate_match(match_id: str):
+    """Simulate a match with full mechanics"""
     match = await db.matches.find_one({"id": match_id})
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
     
-    # Get teams
+    if match.get("played"):
+        raise HTTPException(status_code=400, detail="Match already played")
+    
+    # Get teams and their lineups
     home_team = await db.teams.find_one({"id": match["home_team_id"]})
     away_team = await db.teams.find_one({"id": match["away_team_id"]})
     
-    # For now, simple simulation
-    home_score = random.randint(0, 4)
-    away_score = random.randint(0, 4)
+    if not home_team or not away_team:
+        raise HTTPException(status_code=404, detail="Team not found")
+    
+    # Check if both teams have selected lineups
+    home_lineup = home_team.get("current_lineup", [])
+    away_lineup = away_team.get("current_lineup", [])
+    
+    if len(home_lineup) != 7 or len(away_lineup) != 7:
+        raise HTTPException(status_code=400, detail="Both teams must have 7 players selected")
+    
+    # Get all players data
+    all_players = await db.players.find().to_list(length=None)
+    players_dict = {p["id"]: p for p in all_players}
+    
+    # Convert to format expected by simulator
+    home_players = [players_dict[pid] for pid in home_lineup if pid in players_dict]
+    away_players = [players_dict[pid] for pid in away_lineup if pid in players_dict]
+    
+    # Run simulation
+    match_result = MatchSimulator.simulate_match(
+        home_team, away_team, home_lineup, away_lineup, all_players
+    )
+    
+    home_score = match_result["home_score"]
+    away_score = match_result["away_score"]
     
     # Update match result
     await db.matches.update_one(
@@ -1202,40 +1227,188 @@ async def simulate_match(match_id: str, home_lineup: List[str], away_lineup: Lis
             "away_score": away_score,
             "home_lineup": home_lineup,
             "away_lineup": away_lineup,
-            "played": True,
-            "match_log": []  # Would contain detailed simulation log
+            "match_log": match_result,
+            "played": True
         }}
     )
     
-    # Update team budgets (prize money)
-    home_prize = 500000  # Local team bonus
-    away_prize = 0
+    # Update team statistics and budgets
+    await update_team_stats_after_match(home_team, away_team, home_score, away_score, match["round_number"])
     
-    # Points calculation
-    if home_score > away_score:
-        home_prize += 1000000 * 3  # 3 points * 1M
-    elif home_score < away_score:
-        away_prize += 1000000 * 3  # 3 points * 1M
-    else:
-        home_prize += 1000000 * 1  # 1 point * 1M
-        away_prize += 1000000 * 1  # 1 point * 1M
-    
-    # Update budgets
-    await db.teams.update_one(
-        {"id": match["home_team_id"]},
-        {"$inc": {"budget": home_prize}}
-    )
-    await db.teams.update_one(
-        {"id": match["away_team_id"]},
-        {"$inc": {"budget": away_prize}}
-    )
+    # Update player resistance (games played)
+    await update_player_resistance(home_lineup + away_lineup)
     
     return {
+        "message": "Match simulated successfully",
+        "home_team": home_team["name"],
+        "away_team": away_team["name"],
         "home_score": home_score,
         "away_score": away_score,
-        "home_prize": home_prize,
-        "away_prize": away_prize
+        "match_log": match_result
     }
+
+async def update_team_stats_after_match(home_team, away_team, home_score, away_score, round_number):
+    """Update team statistics after match"""
+    # Calculate points
+    if home_score > away_score:
+        home_points = 3
+        away_points = 0
+        home_wins = 1
+        away_wins = 0
+        home_losses = 0
+        away_losses = 1
+        home_draws = 0
+        away_draws = 0
+    elif home_score < away_score:
+        home_points = 0
+        away_points = 3
+        home_wins = 0
+        away_wins = 1
+        home_losses = 1
+        away_losses = 0
+        home_draws = 0
+        away_draws = 0
+    else:
+        home_points = 1
+        away_points = 1
+        home_wins = 0
+        away_wins = 0
+        home_losses = 0
+        away_losses = 0
+        home_draws = 1
+        away_draws = 1
+    
+    # Calculate prize money
+    home_prize = 500000 + (home_points * 1000000)  # Local bonus + points bonus
+    away_prize = away_points * 1000000  # Only points bonus for away team
+    
+    # Update home team
+    await db.teams.update_one(
+        {"id": home_team["id"]},
+        {"$inc": {
+            "points": home_points,
+            "goals_for": home_score,
+            "goals_against": away_score,
+            "matches_played": 1,
+            "wins": home_wins,
+            "draws": home_draws,
+            "losses": home_losses,
+            "budget": home_prize
+        }}
+    )
+    
+    # Update away team
+    await db.teams.update_one(
+        {"id": away_team["id"]},
+        {"$inc": {
+            "points": away_points,
+            "goals_for": away_score,
+            "goals_against": home_score,
+            "matches_played": 1,
+            "wins": away_wins,
+            "draws": away_draws,
+            "losses": away_losses,
+            "budget": away_prize
+        }}
+    )
+
+async def update_player_resistance(player_ids):
+    """Update player resistance after match"""
+    for player_id in player_ids:
+        player = await db.players.find_one({"id": player_id})
+        if player:
+            games_played = player.get("games_played", 0) + 1
+            resistance = player.get("resistance", 10)
+            
+            # Check if player needs to rest
+            needs_rest = games_played >= resistance
+            
+            await db.players.update_one(
+                {"id": player_id},
+                {"$set": {
+                    "games_played": 0 if needs_rest else games_played,
+                    "is_resting": needs_rest
+                }}
+            )
+
+@api_router.get("/matches/round/{round_number}/current")
+async def get_current_round_status(round_number: int):
+    """Get status of current round matches"""
+    matches = await db.matches.find({"round_number": round_number}).to_list(length=None)
+    
+    total_matches = len(matches)
+    played_matches = len([m for m in matches if m.get("played", False)])
+    
+    # Find next match to play
+    next_match = None
+    for match in matches:
+        if not match.get("played", False):
+            next_match = match
+            break
+    
+    return {
+        "round_number": round_number,
+        "total_matches": total_matches,
+        "played_matches": played_matches,
+        "completed": played_matches == total_matches,
+        "next_match": next_match
+    }
+
+@api_router.post("/league/simulate-next-match")
+async def simulate_next_match():
+    """Simulate the next available match in current round"""
+    game_state = await db.game_state.find_one()
+    if not game_state:
+        raise HTTPException(status_code=404, detail="No game found")
+    
+    current_round = game_state.get("current_round", 1)
+    
+    # Find next unplayed match
+    next_match = await db.matches.find_one({
+        "round_number": current_round,
+        "played": {"$ne": True}
+    })
+    
+    if not next_match:
+        raise HTTPException(status_code=404, detail="No more matches in current round")
+    
+    # Simulate the match
+    try:
+        result = await simulate_match(next_match["id"])
+        
+        # Check if round is complete
+        round_status = await get_current_round_status(current_round)
+        if round_status["completed"]:
+            # Reset lineups for next round and move to lineup selection phase
+            await db.teams.update_many(
+                {},
+                {"$set": {"current_lineup": [], "current_formation": ""}}
+            )
+            
+            # Check if league is complete (14 rounds)
+            if current_round >= 14:
+                await db.game_state.update_one(
+                    {"id": game_state["id"]},
+                    {"$set": {"current_phase": "finished"}}
+                )
+                return {**result, "league_completed": True, "message": "League completed!"}
+            else:
+                # Move to next round
+                await db.game_state.update_one(
+                    {"id": game_state["id"]},
+                    {"$set": {
+                        "current_round": current_round + 1,
+                        "current_phase": "pre_match",
+                        "lineup_selection_phase": True,
+                        "current_team_turn": 0
+                    }}
+                )
+                return {**result, "round_completed": True, "next_round": current_round + 1}
+        
+        return result
+        
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Include the router in the main app
 app.include_router(api_router)

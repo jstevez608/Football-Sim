@@ -218,43 +218,43 @@ class LineupDisruptionTester:
         """Test buying a player who is NOT in seller's lineup (normal case)"""
         print("\n🔄 Testing Normal Transfer (No Lineup Disruption)...")
         
-        # Find Team A and Team B
-        team_a = next((t for t in self.teams if t['name'] == 'Team A'), None)
-        team_b = next((t for t in self.teams if t['name'] == 'Team B'), None)
+        # Find Team G and Team H (Team G can form Formation C)
+        team_g = next((t for t in self.teams if t['name'] == 'Team G'), None)
+        team_h = next((t for t in self.teams if t['name'] == 'Team H'), None)
         
-        if not team_a or not team_b:
-            self.log_test("Find Teams", False, "Could not find Team A or Team B")
+        if not team_g or not team_h:
+            self.log_test("Find Teams", False, "Could not find Team G or Team H")
             return False
 
-        # Get Team A's players (we'll buy one that's NOT in their lineup)
-        team_a_players = [p for p in self.players if p.get('team_id') == team_a['id']]
-        if len(team_a_players) < 7:
-            self.log_test("Team A Players", False, f"Team A has only {len(team_a_players)} players")
+        # Get Team G's players (we'll buy one that's NOT in their lineup)
+        team_g_players = [p for p in self.players if p.get('team_id') == team_g['id']]
+        if len(team_g_players) < 7:
+            self.log_test("Team G Players", False, f"Team G has only {len(team_g_players)} players")
             return False
 
-        # Select a lineup for Team A first (so we know which players are NOT in lineup)
-        formation_key, formation_requirements = self.find_valid_formation_for_team(team_a_players)
+        # Select a lineup for Team G first (so we know which players are NOT in lineup)
+        formation_key, formation_requirements = self.find_valid_formation_for_team(team_g_players)
         if not formation_key:
-            self.log_test("Team A Formation", False, "Team A cannot form any valid formation")
+            self.log_test("Team G Formation", False, "Team G cannot form any valid formation")
             return False
         
         # Select players by position for lineup
         lineup_players = []
         for position, count in formation_requirements.items():
-            position_players = [p for p in team_a_players if p['position'] == position][:count]
+            position_players = [p for p in team_g_players if p['position'] == position][:count]
             lineup_players.extend([p['id'] for p in position_players])
         
         if len(lineup_players) != 7:
-            self.log_test("Team A Lineup Selection", False, f"Could not select 7 players for lineup")
+            self.log_test("Team G Lineup Selection", False, f"Could not select 7 players for lineup")
             return False
 
-        # Select lineup for Team A
+        # Select lineup for Team G
         success, response = self.run_api_test(
-            "Select Team A Lineup", 
+            "Select Team G Lineup", 
             "POST", 
             "league/lineup/select",
             data={
-                "team_id": team_a["id"],
+                "team_id": team_g["id"],
                 "formation": formation_key,
                 "players": lineup_players
             }
@@ -262,15 +262,15 @@ class LineupDisruptionTester:
         if not success:
             return False
 
-        # Find a player from Team A who is NOT in the lineup
+        # Find a player from Team G who is NOT in the lineup
         non_lineup_player = None
-        for player in team_a_players:
+        for player in team_g_players:
             if player['id'] not in lineup_players:
                 non_lineup_player = player
                 break
         
         if not non_lineup_player:
-            self.log_test("Find Non-Lineup Player", False, "All Team A players are in lineup")
+            self.log_test("Find Non-Lineup Player", False, "All Team G players are in lineup")
             return False
 
         # Test buying the non-lineup player
@@ -279,8 +279,8 @@ class LineupDisruptionTester:
             "POST", 
             "teams/buy-player",
             data={
-                "buyer_team_id": team_b["id"],
-                "seller_team_id": team_a["id"],
+                "buyer_team_id": team_h["id"],
+                "seller_team_id": team_g["id"],
                 "player_id": non_lineup_player["id"]
             }
         )
@@ -295,21 +295,21 @@ class LineupDisruptionTester:
 
         self.log_test("Normal Transfer Response", True, "Transfer correctly marked as not affecting lineup")
 
-        # Verify Team A doesn't have disruption flags
+        # Verify Team G doesn't have disruption flags
         success, updated_teams = self.run_api_test("Load Updated Teams", "GET", "teams")
         if not success:
             return False
 
-        updated_team_a = next((t for t in updated_teams if t['id'] == team_a['id']), None)
-        if not updated_team_a:
-            self.log_test("Find Updated Team A", False, "Could not find updated Team A")
+        updated_team_g = next((t for t in updated_teams if t['id'] == team_g['id']), None)
+        if not updated_team_g:
+            self.log_test("Find Updated Team G", False, "Could not find updated Team G")
             return False
 
-        if updated_team_a.get('needs_replacement_turn') or updated_team_a.get('priority_turn'):
-            self.log_test("Team A Disruption Flags", False, "Team A incorrectly has disruption flags")
+        if updated_team_g.get('needs_replacement_turn') or updated_team_g.get('priority_turn'):
+            self.log_test("Team G Disruption Flags", False, "Team G incorrectly has disruption flags")
             return False
 
-        self.log_test("Team A Disruption Flags", True, "Team A correctly has no disruption flags")
+        self.log_test("Team G Disruption Flags", True, "Team G correctly has no disruption flags")
         return True
 
     def test_lineup_disruption_transfer(self):

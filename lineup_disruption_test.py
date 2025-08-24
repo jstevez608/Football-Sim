@@ -28,6 +28,29 @@ class LineupDisruptionTester:
         if details and success:
             print(f"   {details}")
 
+    def find_valid_formation_for_team(self, team_players):
+        """Find a valid formation that the team can use"""
+        formations = {
+            "A": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 3, "DELANTERO": 1},
+            "B": {"PORTERO": 1, "DEFENSA": 3, "MEDIO": 2, "DELANTERO": 1},
+            "C": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 2, "DELANTERO": 2}
+        }
+        
+        # Count available players by position
+        position_counts = {"PORTERO": 0, "DEFENSA": 0, "MEDIO": 0, "DELANTERO": 0}
+        for player in team_players:
+            position = player.get('position', 'UNKNOWN')
+            if position in position_counts:
+                position_counts[position] += 1
+        
+        # Check which formations are possible
+        for formation_key, requirements in formations.items():
+            can_form = all(position_counts[pos] >= count for pos, count in requirements.items())
+            if can_form:
+                return formation_key, requirements
+        
+        return None, None
+
     def run_api_test(self, name, method, endpoint, expected_status=200, data=None, headers=None):
         """Run a single API test"""
         url = f"{self.api_url}/{endpoint}"

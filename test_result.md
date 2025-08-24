@@ -101,3 +101,51 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: Fix the bug "Error al simular partido: 'dict' object has no attribute 'regate'" in the match simulation backend logic.
+
+backend:
+  - task: "Fix dictionary access in match simulation"
+    implemented: false
+    working: false
+    file: "/app/backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        - working: false
+          agent: "user"
+          comment: "User reported error 'dict' object has no attribute 'regate' during match simulation"
+        - working: false
+          agent: "main"
+          comment: "Identified issue in lines 325 and 332 of server.py - using getattr() on dictionary instead of bracket notation"
+
+frontend:
+  - task: "Match simulation UI"
+    implemented: true
+    working: true
+    file: "/app/frontend/src/App.js"
+    stuck_count: 0
+    priority: "low"
+    needs_retesting: false
+    status_history:
+        - working: true
+          agent: "main"
+          comment: "Frontend UI is working correctly, issue is in backend logic only"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 0
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "Fix dictionary access in match simulation"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    - agent: "main"
+      message: "Identified the exact issue - match simulation code is using getattr() to access player stats as object attributes, but MongoDB returns dictionaries. Need to change getattr(player['stats'], stat.lower()) to player['stats'][stat.lower()] on lines 325 and 332."

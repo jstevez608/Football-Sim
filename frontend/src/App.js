@@ -373,12 +373,19 @@ function App() {
     onSelectLineup, onSkipTurn 
   }) => {
     const currentTeamIndex = gameState.current_team_turn || 0;
-    const currentTeam = teams[currentTeamIndex];
+    let currentTeam = teams[currentTeamIndex];
+    
+    // Check if there's a team with priority turn due to lineup disruption
+    const priorityTeam = teams.find(team => team.priority_turn || team.needs_replacement_turn);
+    if (priorityTeam) {
+      currentTeam = priorityTeam;
+    }
     
     if (!currentTeam) return null;
     
     const teamPlayers = players.filter(p => p.team_id === currentTeam.id && !p.is_resting);
     const currentFormation = formations[selectedFormation];
+    const needsReplacement = currentTeam.needs_replacement_turn;
     
     const togglePlayerSelection = (playerId) => {
       if (selectedPlayers.includes(playerId)) {
@@ -419,7 +426,17 @@ function App() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Selección de Alineación - {currentTeam.name}</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            Selección de Alineación - {currentTeam.name}
+            {needsReplacement && (
+              <Badge className="bg-orange-500">Turno de Reemplazo</Badge>
+            )}
+          </CardTitle>
+          {needsReplacement && (
+            <div className="text-sm text-orange-600 bg-orange-50 p-2 rounded">
+              Este equipo necesita seleccionar un jugador de reemplazo porque perdió un jugador de su alineación en una transferencia.
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           <div className="grid lg:grid-cols-3 gap-6">
@@ -527,7 +544,7 @@ function App() {
                     disabled={!canSelectLineup()}
                     className="flex-1"
                   >
-                    Confirmar Alineación
+                    {needsReplacement ? 'Confirmar Reemplazo' : 'Confirmar Alineación'}
                   </Button>
                   <Button 
                     variant="outline"

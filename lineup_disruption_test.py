@@ -447,53 +447,53 @@ class LineupDisruptionTester:
         if not success:
             return False
 
-        # Find Team C (should have needs_replacement_turn flag)
+        # Find Team F (should have needs_replacement_turn flag)
         success, teams = self.run_api_test("Load Teams", "GET", "teams")
         if not success:
             return False
 
-        team_c = next((t for t in teams if t['name'] == 'Team C'), None)
-        if not team_c:
-            self.log_test("Find Team C", False, "Could not find Team C")
+        team_f = next((t for t in teams if t['name'] == 'Team F'), None)
+        if not team_f:
+            self.log_test("Find Team F", False, "Could not find Team F")
             return False
 
-        if not team_c.get('needs_replacement_turn'):
-            self.log_test("Team C Replacement Flag Check", False, "Team C doesn't have needs_replacement_turn flag")
+        if not team_f.get('needs_replacement_turn'):
+            self.log_test("Team F Replacement Flag Check", False, "Team F doesn't have needs_replacement_turn flag")
             return False
 
-        # Get Team C's remaining players
+        # Get Team F's remaining players
         success, players = self.run_api_test("Load Updated Players", "GET", "players")
         if not success:
             return False
 
-        team_c_players = [p for p in players if p.get('team_id') == team_c['id']]
-        if len(team_c_players) < 7:
-            self.log_test("Team C Remaining Players", False, f"Team C has only {len(team_c_players)} players, need 7")
+        team_f_players = [p for p in players if p.get('team_id') == team_f['id']]
+        if len(team_f_players) < 7:
+            self.log_test("Team F Remaining Players", False, f"Team F has only {len(team_f_players)} players, need 7")
             return False
 
-        # Select a new lineup for Team C (should work even if it's not their normal turn)
-        formation_key, formation_requirements = self.find_valid_formation_for_team(team_c_players)
+        # Select a new lineup for Team F (should work even if it's not their normal turn)
+        formation_key, formation_requirements = self.find_valid_formation_for_team(team_f_players)
         if not formation_key:
-            self.log_test("Team C New Formation", False, "Team C cannot form any valid formation")
+            self.log_test("Team F New Formation", False, "Team F cannot form any valid formation")
             return False
         
         # Select players by position for new lineup
         new_lineup_players = []
         for position, count in formation_requirements.items():
-            position_players = [p for p in team_c_players if p['position'] == position][:count]
+            position_players = [p for p in team_f_players if p['position'] == position][:count]
             new_lineup_players.extend([p['id'] for p in position_players])
         
         if len(new_lineup_players) != 7:
-            self.log_test("Team C New Lineup Selection", False, f"Could not select 7 players for new lineup")
+            self.log_test("Team F New Lineup Selection", False, f"Could not select 7 players for new lineup")
             return False
 
-        # Test priority turn - Team C should be able to select lineup even if it's not their normal turn
+        # Test priority turn - Team F should be able to select lineup even if it's not their normal turn
         success, response = self.run_api_test(
-            "Team C Priority Turn Lineup Selection", 
+            "Team F Priority Turn Lineup Selection", 
             "POST", 
             "league/lineup/select",
             data={
-                "team_id": team_c["id"],
+                "team_id": team_f["id"],
                 "formation": formation_key,
                 "players": new_lineup_players
             }
@@ -507,36 +507,36 @@ class LineupDisruptionTester:
             # This is also acceptable - the system might handle it differently
             pass
 
-        self.log_test("Priority Turn Lineup Selection", True, "Team C successfully selected new lineup with priority turn")
+        self.log_test("Priority Turn Lineup Selection", True, "Team F successfully selected new lineup with priority turn")
 
-        # Verify Team C's flags were cleared
+        # Verify Team F's flags were cleared
         success, updated_teams = self.run_api_test("Load Teams After Priority Turn", "GET", "teams")
         if not success:
             return False
 
-        updated_team_c = next((t for t in updated_teams if t['id'] == team_c['id']), None)
-        if not updated_team_c:
-            self.log_test("Find Updated Team C", False, "Could not find updated Team C")
+        updated_team_f = next((t for t in updated_teams if t['id'] == team_f['id']), None)
+        if not updated_team_f:
+            self.log_test("Find Updated Team F", False, "Could not find updated Team F")
             return False
 
-        if updated_team_c.get('needs_replacement_turn') or updated_team_c.get('priority_turn'):
-            self.log_test("Team C Flags Cleared", False, "Team C still has disruption flags after lineup selection")
+        if updated_team_f.get('needs_replacement_turn') or updated_team_f.get('priority_turn'):
+            self.log_test("Team F Flags Cleared", False, "Team F still has disruption flags after lineup selection")
             return False
 
-        self.log_test("Team C Flags Cleared", True, "Team C's disruption flags correctly cleared")
+        self.log_test("Team F Flags Cleared", True, "Team F's disruption flags correctly cleared")
 
-        # Verify Team C has a valid lineup again
-        current_lineup = updated_team_c.get('current_lineup', [])
+        # Verify Team F has a valid lineup again
+        current_lineup = updated_team_f.get('current_lineup', [])
         if len(current_lineup) != 7:
-            self.log_test("Team C New Lineup", False, f"Team C lineup has {len(current_lineup)} players, expected 7")
+            self.log_test("Team F New Lineup", False, f"Team F lineup has {len(current_lineup)} players, expected 7")
             return False
 
-        current_formation = updated_team_c.get('current_formation', '')
+        current_formation = updated_team_f.get('current_formation', '')
         if not current_formation:
-            self.log_test("Team C New Formation", False, "Team C formation not set")
+            self.log_test("Team F New Formation", False, "Team F formation not set")
             return False
 
-        self.log_test("Team C New Lineup", True, f"Team C has valid lineup with formation {current_formation}")
+        self.log_test("Team F New Lineup", True, f"Team F has valid lineup with formation {current_formation}")
 
         return True
 

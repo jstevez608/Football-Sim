@@ -115,19 +115,31 @@ class MatchSimulationTester:
             return False
         self.log_test("Draft Started", True)
 
-        # 6. Draft exactly 56 players (7 per team) following turn order
+        # 6. Draft exactly 56 players (7 per team) following turn order with balanced positions
         available_players = [p for p in self.players if not p.get('team_id')]
-        random.shuffle(available_players)
+        
+        # Separate players by position
+        players_by_position = {
+            "PORTERO": [p for p in available_players if p['position'] == 'PORTERO'],
+            "DEFENSA": [p for p in available_players if p['position'] == 'DEFENSA'],
+            "MEDIO": [p for p in available_players if p['position'] == 'MEDIO'],
+            "DELANTERO": [p for p in available_players if p['position'] == 'DELANTERO']
+        }
+        
+        # Shuffle each position group
+        for position_players in players_by_position.values():
+            random.shuffle(position_players)
+        
+        print(f"   Available players: GK={len(players_by_position['PORTERO'])}, DEF={len(players_by_position['DEFENSA'])}, MID={len(players_by_position['MEDIO'])}, FWD={len(players_by_position['DELANTERO'])}")
+        
+        # Draft strategy: ensure each team gets at least 1 GK, 2 DEF, 2 MID, 1 FWD (6 players), then 1 more
+        required_positions = ["PORTERO", "DEFENSA", "DEFENSA", "MEDIO", "MEDIO", "DELANTERO"]  # 6 required
         
         player_index = 0
         # Draft 7 rounds of players (each team gets 7 players)
         for round_num in range(7):
             print(f"   Drafting round {round_num + 1}/7...")
             for team_index in range(8):  # 8 teams
-                if player_index >= len(available_players):
-                    self.log_test("Draft", False, f"Ran out of available players at round {round_num + 1}")
-                    return False
-                
                 # Get current game state to find whose turn it is
                 success, game_state = self.run_api_test("Get Game State for Draft", "GET", "game/state")
                 if not success:
@@ -147,9 +159,30 @@ class MatchSimulationTester:
                     self.log_test("Draft Turn", False, f"Could not find current team")
                     return False
                 
-                player = available_players[player_index]
+                # Determine what position to draft
+                if round_num < 6:  # First 6 rounds: draft required positions
+                    required_position = required_positions[round_num]
+                    available_for_position = players_by_position[required_position]
+                    
+                    if not available_for_position:
+                        self.log_test("Draft", False, f"No more {required_position} players available")
+                        return False
+                    
+                    player = available_for_position.pop(0)
+                else:  # 7th round: draft any available player
+                    # Find any available player
+                    player = None
+                    for position, position_players in players_by_position.items():
+                        if position_players:
+                            player = position_players.pop(0)
+                            break
+                    
+                    if not player:
+                        self.log_test("Draft", False, f"No more players available for 7th round")
+                        return False
+                
                 success, response = self.run_api_test(
-                    f"Draft {player['name']} to {current_team['name']}", 
+                    f"Draft {player['name']} ({player['position']}) to {current_team['name']}", 
                     "POST", 
                     "draft/pick",
                     data={

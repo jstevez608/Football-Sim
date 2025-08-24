@@ -282,20 +282,33 @@ function App() {
     }
   };
 
-  const draftFreeAgent = async (teamId, playerId) => {
+  const [currentMatch, setCurrentMatch] = useState(null);
+  const [matchResult, setMatchResult] = useState(null);
+  const [showMatchView, setShowMatchView] = useState(false);
+
+  const simulateNextMatch = async () => {
     try {
-      const response = await axios.post(`${API}/draft/pick`, {
-        team_id: teamId,
-        player_id: playerId,
-        clause_amount: 0
-      });
-      await loadPlayers();
-      await loadTeams();
-      alert('Jugador libre fichado correctamente');
+      setShowMatchView(true);
+      const response = await axios.post(`${API}/league/simulate-next-match`);
+      setMatchResult(response.data);
+      await loadStandings();
+      await loadRoundMatches(gameState.current_round);
+      await loadGameState();
+      
+      if (response.data.round_completed) {
+        alert(`¡Jornada ${gameState.current_round} completada! Pasando a Jornada ${response.data.next_round}`);
+      } else if (response.data.league_completed) {
+        alert('¡Liga completada! ¡Felicidades al campeón!');
+      }
     } catch (error) {
-      console.error('Error drafting free agent:', error);
-      alert('Error al fichar jugador libre: ' + (error.response?.data?.detail || 'Error desconocido'));
+      console.error('Error simulating match:', error);
+      alert('Error al simular partido: ' + (error.response?.data?.detail || 'Error desconocido'));
     }
+  };
+
+  const closeMatchView = () => {
+    setShowMatchView(false);
+    setMatchResult(null);
   };
 
   const startLeague = async () => {

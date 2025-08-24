@@ -4,7 +4,7 @@ import requests
 import json
 
 def debug_team_composition():
-    base_url = "https://soccer-draft-league.preview.emergentagent.com"
+    base_url = "https://footysim-pro.preview.emergentagent.com"
     api_url = f"{base_url}/api"
     
     # Get teams

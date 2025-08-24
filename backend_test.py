@@ -8,7 +8,7 @@ import time
 import random
 
 class MatchSimulationTester:
-    def __init__(self, base_url="https://soccer-draft-league.preview.emergentagent.com"):
+    def __init__(self, base_url="https://footysim-pro.preview.emergentagent.com"):
         self.base_url = base_url
         self.api_url = f"{base_url}/api"
         self.tests_run = 0

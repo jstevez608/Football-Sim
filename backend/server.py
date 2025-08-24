@@ -168,8 +168,19 @@ class MatchSimulator:
         "PORTERO": 0.00  # Except for specific actions
     }
     
+    DEFENSE_ACTIONS = {
+        "PASE": "BLOQUEO",
+        "REGATE": "ROBO", 
+        "CORNER": "DESPEJE",
+        "AREA": "BLOQUEO",
+        "TIRO": "PARADA",
+        "REMATE": "PARADA",
+        "PENALTI": "ATAJADA"
+    }
+    
     @staticmethod
     def choose_action():
+        """Choose random action based on probabilities"""
         rand = random.random()
         cumulative = 0
         for action, prob in MatchSimulator.ACTION_PROBABILITIES.items():
@@ -179,23 +190,31 @@ class MatchSimulator:
         return "PASE"
     
     @staticmethod
-    def choose_player(players, probabilities, attacking=True):
-        available_players = [p for p in players if p.position != "PORTERO" or not attacking]
+    def choose_player_by_position(players, attack_mode=True):
+        """Choose player based on position probabilities"""
+        if attack_mode:
+            probabilities = MatchSimulator.POSITION_ATTACK_PROB
+        else:
+            probabilities = MatchSimulator.POSITION_DEFENSE_PROB
+        
+        # Filter available players
+        available_players = []
+        weights = []
+        
+        for player in players:
+            prob = probabilities.get(player["position"], 0)
+            if prob > 0:
+                available_players.append(player)
+                weights.append(prob)
+        
         if not available_players:
             return random.choice(players)
         
-        weights = []
-        for player in available_players:
-            if attacking:
-                weights.append(MatchSimulator.POSITION_ATTACK_PROB.get(player.position, 0))
-            else:
-                weights.append(MatchSimulator.POSITION_DEFENSE_PROB.get(player.position, 0))
-        
-        if sum(weights) == 0:
-            return random.choice(available_players)
-        
-        rand = random.random() * sum(weights)
+        # Weighted random selection
+        total_weight = sum(weights)
+        rand = random.random() * total_weight
         cumulative = 0
+        
         for i, weight in enumerate(weights):
             cumulative += weight
             if rand <= cumulative:
@@ -205,41 +224,37 @@ class MatchSimulator:
     
     @staticmethod
     def choose_defender(players, action):
+        """Choose defender based on action type"""
         if action in ["TIRO", "REMATE", "PENALTI"]:
             # Only goalkeeper can defend these
-            goalkeepers = [p for p in players if p.position == "PORTERO"]
+            goalkeepers = [p for p in players if p["position"] == "PORTERO"]
             return goalkeepers[0] if goalkeepers else random.choice(players)
         else:
-            return MatchSimulator.choose_player(players, MatchSimulator.POSITION_DEFENSE_PROB, attacking=False)
+            # Use defense probabilities for other actions
+            return MatchSimulator.choose_player_by_position(players, attack_mode=False)
     
     @staticmethod
     def get_defense_action(attack_action):
-        defense_map = {
-            "PASE": "BLOQUEO",
-            "REGATE": "ROBO", 
-            "CORNER": "DESPEJE",
-            "AREA": "BLOQUEO",
-            "TIRO": "PARADA",
-            "REMATE": "PARADA",
-            "PENALTI": "ATAJADA"
-        }
-        return defense_map.get(attack_action, "ROBO")
+        """Get corresponding defense action"""
+        return MatchSimulator.DEFENSE_ACTIONS.get(attack_action, "ROBO")
     
     @staticmethod
     def calculate_action_result(attacker, attack_action, defender, defense_action):
+        """Calculate if attack succeeds based on player stats + random factor"""
         # Get attacker's stat for the action
-        attacker_stat = getattr(attacker.stats, attack_action.lower())
-        # Get defender's stat for the defense action
-        defender_stat = getattr(defender.stats, defense_action.lower())
+        attack_stat = getattr(attacker["stats"], attack_action.lower())
+        # Get defender's stat for the defense action  
+        defense_stat = getattr(defender["stats"], defense_action.lower())
         
         # Add random factor (1-3)
-        attacker_total = attacker_stat + random.randint(1, 3)
-        defender_total = defender_stat + random.randint(1, 3)
+        attacker_total = attack_stat + random.randint(1, 3)
+        defender_total = defense_stat + random.randint(1, 3)
         
         return attacker_total > defender_total
     
     @staticmethod
     def get_follow_up_actions(action):
+        """Get possible follow-up actions if attack succeeds"""
         follow_ups = {
             "PASE": ["REGATE", "TIRO", "CORNER", "AREA"],
             "REGATE": ["TIRO", "PASE", "AREA"],
@@ -249,46 +264,149 @@ class MatchSimulator:
         return follow_ups.get(action, [])
     
     @staticmethod
-    def simulate_match(home_team, away_team, home_lineup, away_lineup):
-        home_score = 0
-        away_score = 0
-        match_log = []
+    def is_goal_action(action):
+        """Check if action results in goal when successful"""
+        return action in ["TIRO", "REMATE", "PENALTI"]
+    
+    @staticmethod
+    def simulate_turn(attacking_team, defending_team, attacking_players, defending_players, turn_number):
+        """Simulate a single turn of the match"""
+        turn_log = {
+            "turn": turn_number,
+            "attacking_team": attacking_team["name"],
+            "defending_team": defending_team["name"],
+            "actions": [],
+            "goal_scored": False,
+            "final_action": None
+        }
         
-        # Convert lineup IDs to player objects (this would need actual player lookup)
-        # For now, simulating with basic structure
+        current_attacker = None
+        actions_in_turn = 0
+        max_actions = 10  # Prevent infinite loops
         
-        for turn in range(18):  # 9 turns per team
-            attacking_team = home_team if turn % 2 == 0 else away_team
-            defending_team = away_team if turn % 2 == 0 else home_team
-            attacking_lineup = home_lineup if turn % 2 == 0 else away_lineup
-            defending_lineup = away_lineup if turn % 2 == 0 else home_lineup
+        while actions_in_turn < max_actions:
+            actions_in_turn += 1
             
-            # For simulation purposes - in real implementation, need to fetch actual player objects
-            turn_log = {
-                "turn": turn + 1,
-                "attacking_team": attacking_team.name,
-                "actions": []
+            # Choose initial action or follow-up action
+            if current_attacker is None:
+                # First action of turn
+                action = MatchSimulator.choose_action()
+                current_attacker = MatchSimulator.choose_player_by_position(attacking_players, attack_mode=True)
+            else:
+                # Follow-up action from previous success
+                possible_actions = MatchSimulator.get_follow_up_actions(turn_log["actions"][-1]["action"])
+                if not possible_actions:
+                    break
+                action = random.choice(possible_actions)
+                
+                # For follow-up actions, same player continues or different player
+                if turn_log["actions"][-1]["action"] in ["REGATE", "AREA"]:
+                    # Same player continues
+                    pass
+                else:
+                    # Different player for PASE, CORNER
+                    current_attacker = MatchSimulator.choose_player_by_position(attacking_players, attack_mode=True)
+            
+            # Choose defender
+            defender = MatchSimulator.choose_defender(defending_players, action)
+            defense_action = MatchSimulator.get_defense_action(action)
+            
+            # Calculate result
+            attack_successful = MatchSimulator.calculate_action_result(
+                current_attacker, action, defender, defense_action
+            )
+            
+            # Create action log
+            action_log = {
+                "action": action,
+                "attacker": {
+                    "name": current_attacker["name"],
+                    "position": current_attacker["position"],
+                    "stat_value": getattr(current_attacker["stats"], action.lower()),
+                    "random_bonus": random.randint(1, 3)
+                },
+                "defender": {
+                    "name": defender["name"],
+                    "position": defender["position"],
+                    "defense_action": defense_action,
+                    "stat_value": getattr(defender["stats"], defense_action.lower()),
+                    "random_bonus": random.randint(1, 3)
+                },
+                "successful": attack_successful,
+                "is_goal": False
             }
             
-            # Simulate turn actions (simplified for now)
-            action = MatchSimulator.choose_action()
+            # Recalculate for logging (since we used random twice)
+            action_log["attacker"]["total"] = action_log["attacker"]["stat_value"] + action_log["attacker"]["random_bonus"]
+            action_log["defender"]["total"] = action_log["defender"]["stat_value"] + action_log["defender"]["random_bonus"]
             
-            turn_log["actions"].append({
-                "action": action,
-                "result": "simulated"  # Would contain actual simulation results
-            })
+            turn_log["actions"].append(action_log)
             
-            # Simplified scoring - in real implementation would use full logic
-            if random.random() < 0.1:  # 10% chance of goal per turn
-                if turn % 2 == 0:
-                    home_score += 1
+            if attack_successful:
+                # Check if it's a goal action
+                if MatchSimulator.is_goal_action(action):
+                    turn_log["goal_scored"] = True
+                    action_log["is_goal"] = True
+                    turn_log["final_action"] = action
+                    break
                 else:
-                    away_score += 1
-                turn_log["goal"] = True
-            
-            match_log.append(turn_log)
+                    # Continue with follow-up action
+                    continue
+            else:
+                # Defense succeeded, turn ends
+                turn_log["final_action"] = f"{defense_action}_SUCCESS"
+                break
         
-        return home_score, away_score, match_log
+        return turn_log
+    
+    @staticmethod
+    def simulate_match(home_team, away_team, home_lineup_ids, away_lineup_ids, players_data):
+        """Simulate complete match with 9 turns per team"""
+        # Get player objects for lineups
+        home_players = [p for p in players_data if p["id"] in home_lineup_ids]
+        away_players = [p for p in players_data if p["id"] in away_lineup_ids]
+        
+        if len(home_players) != 7 or len(away_players) != 7:
+            raise ValueError("Each team must have exactly 7 players in lineup")
+        
+        match_log = {
+            "home_team": home_team["name"],
+            "away_team": away_team["name"],
+            "home_score": 0,
+            "away_score": 0,
+            "turns": [],
+            "total_turns": 18
+        }
+        
+        # Simulate 18 turns (9 per team, alternating)
+        for turn_num in range(1, 19):
+            if turn_num % 2 == 1:  # Odd turns: home team attacks
+                attacking_team = home_team
+                defending_team = away_team
+                attacking_players = home_players
+                defending_players = away_players
+            else:  # Even turns: away team attacks
+                attacking_team = away_team
+                defending_team = home_team
+                attacking_players = away_players
+                defending_players = home_players
+            
+            turn_result = MatchSimulator.simulate_turn(
+                attacking_team, defending_team, 
+                attacking_players, defending_players, 
+                turn_num
+            )
+            
+            # Update score if goal was scored
+            if turn_result["goal_scored"]:
+                if turn_num % 2 == 1:  # Home team scored
+                    match_log["home_score"] += 1
+                else:  # Away team scored
+                    match_log["away_score"] += 1
+            
+            match_log["turns"].append(turn_result)
+        
+        return match_log
 
 # API Routes
 @api_router.get("/")

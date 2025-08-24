@@ -106,7 +106,7 @@ user_problem_statement: Fix the bug "Error al simular partido: 'dict' object has
 
 backend:
   - task: "Fix dictionary access in match simulation"
-    implemented: false
+    implemented: true
     working: false
     file: "/app/backend/server.py"
     stuck_count: 0
@@ -119,6 +119,9 @@ backend:
         - working: false
           agent: "main"
           comment: "Identified issue in lines 325 and 332 of server.py - using getattr() on dictionary instead of bracket notation"
+        - working: false
+          agent: "main"
+          comment: "Fixed the issue by replacing getattr(player['stats'], stat.lower()) with player['stats'][stat.lower()] in action log creation"
 
 frontend:
   - task: "Match simulation UI"

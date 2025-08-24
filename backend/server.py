@@ -241,10 +241,10 @@ class MatchSimulator:
     @staticmethod
     def calculate_action_result(attacker, attack_action, defender, defense_action):
         """Calculate if attack succeeds based on player stats + random factor"""
-        # Get attacker's stat for the action
-        attack_stat = getattr(attacker["stats"], attack_action.lower())
-        # Get defender's stat for the defense action  
-        defense_stat = getattr(defender["stats"], defense_action.lower())
+        # Get attacker's stat for the action (using dict access)
+        attack_stat = attacker["stats"][attack_action.lower()]
+        # Get defender's stat for the defense action (using dict access)
+        defense_stat = defender["stats"][defense_action.lower()]
         
         # Add random factor (1-3)
         attacker_total = attack_stat + random.randint(1, 3)

@@ -1311,6 +1311,17 @@ function App() {
                         <p className="text-sm text-blue-600">
                           Turno actual: <strong>{teams.find(t => t.id === (teams[gameState.current_team_turn] || {}).id)?.name || 'Cargando...'}</strong>
                         </p>
+                        
+                        {/* Check if any team needs replacement turn */}
+                        {teams.some(team => team.needs_replacement_turn) && (
+                          <div className="mt-2 p-2 bg-orange-100 border border-orange-300 rounded">
+                            <p className="text-sm text-orange-700">
+                              ⚠️ <strong>{teams.find(t => t.needs_replacement_turn)?.name}</strong> necesita seleccionar un jugador de reemplazo 
+                              porque perdió un jugador de su alineación en una transferencia.
+                            </p>
+                          </div>
+                        )}
+                        
                         <p className="text-xs text-blue-500 mt-1">
                           Cada equipo debe seleccionar formación y 7 jugadores para el próximo partido.
                         </p>

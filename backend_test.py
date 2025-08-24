@@ -167,6 +167,11 @@ class MatchSimulationTester:
             return False
         self.teams = teams
 
+        success, players = self.run_api_test("Load Updated Players", "GET", "players")
+        if not success:
+            return False
+        self.players = players
+
         success, game_state = self.run_api_test("Load Game State", "GET", "game/state")
         if not success:
             return False
@@ -183,6 +188,10 @@ class MatchSimulationTester:
         for team in self.teams:
             # Get team players
             team_players = [p for p in self.players if p.get('team_id') == team['id']]
+            
+            if len(team_players) < 7:
+                self.log_test(f"Team {team['name']} Players", False, f"Team has only {len(team_players)} players, need 7")
+                return False
             
             # Select formation A (4-3-1) for simplicity
             formation = "A"

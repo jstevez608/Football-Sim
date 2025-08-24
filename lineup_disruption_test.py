@@ -31,9 +31,9 @@ class LineupDisruptionTester:
     def find_valid_formation_for_team(self, team_players):
         """Find a valid formation that the team can use"""
         formations = {
-            "A": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 3, "DELANTERO": 1},
+            "C": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 2, "DELANTERO": 2},  # Try C first as it's most flexible
             "B": {"PORTERO": 1, "DEFENSA": 3, "MEDIO": 2, "DELANTERO": 1},
-            "C": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 2, "DELANTERO": 2}
+            "A": {"PORTERO": 1, "DEFENSA": 2, "MEDIO": 3, "DELANTERO": 1}
         }
         
         # Count available players by position
@@ -43,9 +43,12 @@ class LineupDisruptionTester:
             if position in position_counts:
                 position_counts[position] += 1
         
+        print(f"   Team position counts: {position_counts}")
+        
         # Check which formations are possible
         for formation_key, requirements in formations.items():
             can_form = all(position_counts[pos] >= count for pos, count in requirements.items())
+            print(f"   Formation {formation_key} requirements: {requirements}, can form: {can_form}")
             if can_form:
                 return formation_key, requirements
         
